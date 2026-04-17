@@ -4,19 +4,18 @@ This document records key decisions made during the design of this platform.
 
 ## Infrastructure
 
-### Server Type: CPX42
+### Server Types: CPX22 Control Plane, CPX42 Workers
 
-**Decision**: Use CPX42 instances (8 vCPU, 16GB RAM, 320GB disk)
+**Decision**: Use `CPX22` for control-plane nodes and `CPX42` for worker nodes
 
 **Rationale**:
-- Good balance of resources for combined control-plane + worker nodes
-- Within budget target (~€16.40/month per server)
-- AMD EPYC processors provide consistent performance
-- 320GB disk provides room for container images and logs
+- `CPX22` is sufficient for small k3s control-plane nodes
+- `CPX42` gives workers enough headroom for application workloads
+- This stays within the target monthly budget while separating responsibilities
 
 **Alternatives Considered**:
-- CPX41 (smaller): Insufficient RAM for workloads + control plane
-- CPX51 (larger): Exceeds budget, overkill for initial setup
+- `CPX42` everywhere: simpler but less cost efficient for control-plane nodes
+- smaller worker nodes: less room for real workloads
 
 ### Node Layout: 3 Control-Plane Nodes, Optional Workers
 

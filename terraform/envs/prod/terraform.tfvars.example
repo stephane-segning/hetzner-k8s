@@ -1,59 +1,27 @@
-variable "hcloud_token" {
-  default = "YOUR_HCLOUD_TOKEN"
-}
+hcloud_token = "YOUR_HCLOUD_TOKEN"
 
-variable "cluster_name" {
-  default = "hetzner-k8s"
-}
+cluster_name = "hetzner-k8s"
 
-variable "server_type" {
-  default = "cpx42"
-}
+control_plane_server_type = "cpx22"
+worker_server_type        = "cpx42"
 
-variable "control_plane_count" {
-  default = 3
-}
+control_plane_count = 3
+worker_count        = 2
 
-variable "worker_count" {
-  default = 0
-}
+location = "fsn1"
 
-variable "location" {
-  default = "fsn1"
-}
+ssh_key_ids = ["your-ssh-key-name"]
 
-variable "ssh_key_ids" {
-  default = []
-}
+allowed_ssh_ips = ["YOUR_IP/32"]
 
-variable "allowed_ssh_ips" {
-  default = ["YOUR_IP/32"]
-}
+# Restrict this to the static egress IP or CIDR used by the home Argo CD cluster.
+allowed_api_ips = ["HOME_CLUSTER_EGRESS_IP/32"]
 
-variable "allowed_api_ips" {
-  default = ["0.0.0.0/0", "::/0"]
-}
+create_data_volumes = false
+data_volume_size_gb = 50
 
-variable "create_data_volumes" {
-  default = false
-}
+k3s_version = "latest"
+k3s_token   = ""
 
-variable "data_volume_size_gb" {
-  default = 50
-}
-
-variable "k3s_version" {
-  default = "latest"
-}
-
-variable "k3s_token" {
-  default = ""
-}
-
-variable "extra_server_args" {
-  default = "--disable traefik --disable servicelb"
-}
-
-variable "extra_agent_args" {
-  default = ""
-}
+extra_server_args = ""
+extra_agent_args  = ""

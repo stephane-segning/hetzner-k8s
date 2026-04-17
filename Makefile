@@ -125,6 +125,7 @@ clean:
 
 show-costs:
 	@echo "==> Estimated monthly costs"
-	@echo "3x CPX42 servers: €49.20"
+	@echo "3x CPX22 control planes: ~€22-23"
+	@echo "2x CPX42 workers: ~€32-33"
 	@echo "1x Kubernetes-managed Hetzner LB: €5.83"
-	@echo "Estimated total: ~€55/month"
+	@echo "Estimated total: ~€60-70/month"

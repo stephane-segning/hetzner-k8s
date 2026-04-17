@@ -43,8 +43,8 @@ make plan
 Review the plan output. You should see:
 - 1 private network
 - 1 firewall
-- 3 control-plane servers by default
-- 0 worker servers by default
+- 3 `CPX22` control-plane servers by default
+- 2 `CPX42` worker servers by default
 
 ## Step 4: Apply Infrastructure
 

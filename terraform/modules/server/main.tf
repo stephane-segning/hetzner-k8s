@@ -11,7 +11,7 @@ resource "hcloud_server" "main" {
   for_each = var.nodes
 
   name        = each.value.name
-  server_type = var.server_type
+  server_type = each.value.server_type
   image       = var.image
   location    = var.location
   ssh_keys    = var.ssh_keys

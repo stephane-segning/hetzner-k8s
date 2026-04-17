@@ -1,9 +1,3 @@
-variable "server_type" {
-  description = "Hetzner server type"
-  type        = string
-  default     = "cpx42"
-}
-
 variable "image" {
   description = "OS image to use"
   type        = string
@@ -42,11 +36,12 @@ variable "labels" {
 variable "nodes" {
   description = "Deterministic node definitions"
   type = map(object({
-    name       = string
-    role       = string
-    private_ip = string
-    user_data  = string
-    labels     = optional(map(string), {})
+    name        = string
+    role        = string
+    server_type = string
+    private_ip  = string
+    user_data   = string
+    labels      = optional(map(string), {})
   }))
 }
 

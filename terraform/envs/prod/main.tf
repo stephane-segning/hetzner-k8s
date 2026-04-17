@@ -33,8 +33,14 @@ variable "cluster_name" {
   default     = "hetzner-k8s"
 }
 
-variable "server_type" {
-  description = "Hetzner server type for all nodes"
+variable "control_plane_server_type" {
+  description = "Hetzner server type for control-plane nodes"
+  type        = string
+  default     = "cpx22"
+}
+
+variable "worker_server_type" {
+  description = "Hetzner server type for worker nodes"
   type        = string
   default     = "cpx42"
 }
@@ -48,7 +54,7 @@ variable "control_plane_count" {
 variable "worker_count" {
   description = "Number of dedicated worker nodes"
   type        = number
-  default     = 0
+  default     = 2
 }
 
 variable "location" {
@@ -124,9 +130,10 @@ locals {
 
   control_plane_nodes = {
     for index in range(var.control_plane_count) : format("control-plane-%02d", index + 1) => {
-      name       = format("%s-cp-%d", var.cluster_name, index + 1)
-      role       = "control-plane"
-      private_ip = cidrhost(module.network.subnet_ip_range, 10 + index)
+      name        = format("%s-cp-%d", var.cluster_name, index + 1)
+      role        = "control-plane"
+      server_type = var.control_plane_server_type
+      private_ip  = cidrhost(module.network.subnet_ip_range, 10 + index)
       user_data = templatefile("${path.module}/../../../bootstrap/cloud-init/node.yaml", {
         k3s_version         = var.k3s_version
         k3s_token           = local.k3s_token
@@ -144,9 +151,10 @@ locals {
 
   worker_nodes = {
     for index in range(var.worker_count) : format("worker-%02d", index + 1) => {
-      name       = format("%s-worker-%d", var.cluster_name, index + 1)
-      role       = "worker"
-      private_ip = cidrhost(module.network.subnet_ip_range, 20 + index)
+      name        = format("%s-worker-%d", var.cluster_name, index + 1)
+      role        = "worker"
+      server_type = var.worker_server_type
+      private_ip  = cidrhost(module.network.subnet_ip_range, 20 + index)
       user_data = templatefile("${path.module}/../../../bootstrap/cloud-init/node.yaml", {
         k3s_version         = var.k3s_version
         k3s_token           = local.k3s_token
@@ -216,7 +224,6 @@ module "firewall" {
 module "servers" {
   source = "../../modules/server"
 
-  server_type    = var.server_type
   location       = var.location
   network_id     = module.network.network_id
   firewall_ids   = module.firewall.firewall_ids

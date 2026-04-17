@@ -24,9 +24,10 @@ test_variable_default() {
 }
 
 test_variable_default "cluster_name" "hetzner-k8s" "$PROJECT_ROOT/terraform/envs/prod/main.tf"
-test_variable_default "server_type" "cpx42" "$PROJECT_ROOT/terraform/envs/prod/main.tf"
+test_variable_default "control_plane_server_type" "cpx22" "$PROJECT_ROOT/terraform/envs/prod/main.tf"
+test_variable_default "worker_server_type" "cpx42" "$PROJECT_ROOT/terraform/envs/prod/main.tf"
 test_variable_default "control_plane_count" "3" "$PROJECT_ROOT/terraform/envs/prod/main.tf"
-test_variable_default "worker_count" "0" "$PROJECT_ROOT/terraform/envs/prod/main.tf"
+test_variable_default "worker_count" "2" "$PROJECT_ROOT/terraform/envs/prod/main.tf"
 test_variable_default "location" "fsn1" "$PROJECT_ROOT/terraform/envs/prod/main.tf"
 
 echo ""

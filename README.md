@@ -6,7 +6,8 @@ A production-ready, self-managed Kubernetes cluster on Hetzner Cloud for small p
 
 This repository provisions a **Hetzner-hosted k3s cluster** on Hetzner Cloud with:
 
-- **Control plane**: 3 control-plane nodes by default, with optional dedicated workers
+- **Control plane**: 3 `CPX22` control-plane nodes by default
+- **Workers**: 2 `CPX42` worker nodes by default
 - **Ingress**: Traefik exposed through a Kubernetes-managed Hetzner Load Balancer
 - **Storage**: Hetzner CSI driver for persistent volumes
 - **Networking**: Private network with firewall protection
@@ -18,7 +19,7 @@ This repository provisions a **Hetzner-hosted k3s cluster** on Hetzner Cloud wit
 ### Infrastructure (Terraform)
 - Hetzner private network and subnet
 - Firewall rules (SSH, Kubernetes API, internal traffic)
-- Deterministic control-plane and worker nodes running Ubuntu 24.04 LTS
+- Deterministic `CPX22` control-plane and `CPX42` worker nodes running Ubuntu 24.04 LTS
 - Optional data volumes
 
 ### Bootstrap (cloud-init/scripts)
@@ -158,10 +159,11 @@ If only k3s needs reinstall:
 
 | Resource | Monthly Cost |
 |----------|--------------|
-| 3x CPX42 servers | ~€49.20 |
+| 3x CPX22 control planes | ~€22-23 |
+| 2x CPX42 workers | ~€32-33 |
 | 1x Hetzner LB via Traefik service | ~€5.83 |
 | Traffic (est.) | ~€5-10 |
-| **Total** | **~€60-65/month** |
+| **Total** | **~€60-70/month** |
 
 ## Security Baseline
 
