@@ -1,6 +1,6 @@
 # Hetzner Kubernetes Platform
 
-A production-ready, self-managed Kubernetes cluster on Hetzner Cloud for small platforms.
+A production-ready, self-managed Kubernetes cluster on Hetzner Cloud for small platforms, operated primarily through GitHub Actions.
 
 ## Overview
 
@@ -65,9 +65,14 @@ This repository provisions a **Hetzner-hosted k3s cluster** on Hetzner Cloud wit
 
 ### Prerequisites
 
-- Terraform >= 1.6
 - Hetzner Cloud API token
 - SSH key pair
+- Hetzner Object Storage bucket for Terraform state
+- GitHub repository secrets and variables configured
+
+For local validation only:
+
+- Terraform >= 1.6
 - kubectl
 - helm
 
@@ -76,6 +81,8 @@ This repository provisions a **Hetzner-hosted k3s cluster** on Hetzner Cloud wit
 Prefer the GitHub Actions workflows in `.github/workflows/`.
 
 Set the required secrets and variables described in [docs/github-actions.md](./docs/github-actions.md).
+
+This is the supported operational path for provisioning, power-off, and destroy.
 
 ### 2. Trigger Infrastructure Workflow
 
@@ -91,6 +98,8 @@ Use GitHub Actions:
 cp terraform/envs/prod/terraform.tfvars.example terraform/envs/prod/terraform.tfvars
 # Edit terraform.tfvars only if you need local validation
 ```
+
+Do not commit `terraform.tfvars` or any `.bak` variant. They are local-only.
 
 ### 4. Optional Local Validation Commands
 
@@ -141,9 +150,9 @@ make test
 
 ### Full Rebuild
 
-1. `make destroy` - Remove all infrastructure
-2. `make apply` - Recreate infrastructure
-3. `make bootstrap` - Re-bootstrap cluster
+1. Trigger `Infra Destroy` in GitHub Actions
+2. Trigger `Infra Up` in GitHub Actions
+3. Wait for bootstrap readiness and retrieve kubeconfig
 
 ### Partial Recovery
 
@@ -179,6 +188,12 @@ If only k3s needs reinstall:
 - The control-plane nodes only accept API traffic from the private network by default.
 - The dedicated API load balancer provides a stable endpoint, but Hetzner load balancers do not currently give us the same server-side source IP allowlisting semantics as direct node firewalls when forwarding over the private network.
 - Treat Kubernetes authentication and authorization as the primary security boundary for the public API endpoint unless you add an outer private-access layer.
+
+## CI/CD Flows
+
+- `Infra Up`: validates, applies Terraform, and powers on servers
+- `Infra Down`: powers off Terraform-managed servers without destroying infra
+- `Infra Destroy`: removes the known CCM-managed ingress LB and destroys Terraform-managed infrastructure
 
 ## Next Steps
 

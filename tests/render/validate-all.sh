@@ -11,11 +11,15 @@ echo "==> Validating Terraform"
 
 cd "$PROJECT_ROOT/terraform/envs/prod"
 
-if [ ! -f "terraform.tfvars" ]; then
-    echo "Creating temporary tfvars for validation..."
-    cp terraform.tfvars.example terraform.tfvars
-    sed -i.bak 's/YOUR_HCLOUD_TOKEN/test_token_for_validation/g' terraform.tfvars
-fi
+TEMP_TFVARS="$(mktemp "$PWD/terraform.tfvars.validation.XXXXXX")"
+cleanup() {
+    rm -f "$TEMP_TFVARS"
+}
+trap cleanup EXIT
+
+echo "Creating temporary tfvars for validation..."
+cp terraform.tfvars.example "$TEMP_TFVARS"
+perl -0pi -e 's/YOUR_HCLOUD_TOKEN/test_token_for_validation/g' "$TEMP_TFVARS"
 
 terraform init -backend=false >/dev/null 2>&1 || true
 terraform validate
