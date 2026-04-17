@@ -26,32 +26,50 @@ variable "target_server_ids" {
   type        = list(number)
 }
 
+variable "use_private_ip" {
+  description = "Use private IPs for load balancer targets"
+  type        = bool
+  default     = true
+}
+
 variable "labels" {
   description = "Labels to apply"
   type        = map(string)
   default     = {}
 }
 
-variable "http_port" {
-  description = "HTTP port"
-  type        = number
-  default     = 80
+variable "service_protocol" {
+  description = "Load balancer service protocol"
+  type        = string
+  default     = "tcp"
 }
 
-variable "https_port" {
-  description = "HTTPS port"
+variable "listen_port" {
+  description = "Public listen port"
   type        = number
-  default     = 443
+  default     = 6443
+}
+
+variable "destination_port" {
+  description = "Target port on backend nodes"
+  type        = number
+  default     = 6443
 }
 
 variable "health_check_port" {
   description = "Health check port"
   type        = number
-  default     = 80
+  default     = 6443
+}
+
+variable "health_check_protocol" {
+  description = "Health check protocol"
+  type        = string
+  default     = "tcp"
 }
 
 variable "health_check_path" {
   description = "Health check path"
   type        = string
-  default     = "/healthz"
+  default     = null
 }

@@ -15,5 +15,5 @@ output "ipv6_address" {
 }
 
 output "hostname" {
-  value = "${hcloud_load_balancer.main.ipv4}.your-talos.com"
+  value = hcloud_load_balancer.main.name
 }

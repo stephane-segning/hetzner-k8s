@@ -25,45 +25,28 @@ resource "hcloud_load_balancer_target" "main" {
   load_balancer_id = hcloud_load_balancer.main.id
   type             = "server"
   server_id        = var.target_server_ids[count.index]
-  use_private_ip   = true
+  use_private_ip   = var.use_private_ip
 }
 
-resource "hcloud_load_balancer_service" "http" {
+resource "hcloud_load_balancer_service" "main" {
   load_balancer_id = hcloud_load_balancer.main.id
-  protocol         = "http"
-  listen_port      = var.http_port
-  destination_port = 80
+  protocol         = var.service_protocol
+  listen_port      = var.listen_port
+  destination_port = var.destination_port
 
   health_check {
-    protocol = "http"
+    protocol = var.health_check_protocol
     port     = var.health_check_port
     interval = 10
     timeout  = 5
     retries  = 3
-    http {
-      path     = var.health_check_path
-      domain   = ""
-      response = ""
-    }
-  }
-}
-
-resource "hcloud_load_balancer_service" "https" {
-  load_balancer_id = hcloud_load_balancer.main.id
-  protocol         = "https"
-  listen_port      = var.https_port
-  destination_port = 443
-
-  health_check {
-    protocol = "https"
-    port     = var.health_check_port
-    interval = 10
-    timeout  = 5
-    retries  = 3
-    http {
-      path     = var.health_check_path
-      domain   = ""
-      response = ""
+    dynamic "http" {
+      for_each = contains(["http", "https"], var.health_check_protocol) ? [1] : []
+      content {
+        path     = coalesce(var.health_check_path, "/")
+        domain   = ""
+        response = ""
+      }
     }
   }
 }

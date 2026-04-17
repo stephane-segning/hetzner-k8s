@@ -22,12 +22,15 @@ resource "hcloud_firewall" "main" {
     }
   }
 
-  rule {
-    direction   = "in"
-    protocol    = "tcp"
-    port        = "6443"
-    source_ips  = var.allowed_api_ips
-    description = "Kubernetes API server"
+  dynamic "rule" {
+    for_each = length(var.allowed_api_ips) > 0 ? [1] : []
+    content {
+      direction   = "in"
+      protocol    = "tcp"
+      port        = "6443"
+      source_ips  = var.allowed_api_ips
+      description = "Direct Kubernetes API server access"
+    }
   }
 
   rule {
