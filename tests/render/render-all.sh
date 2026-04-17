@@ -27,6 +27,7 @@ if command -v helm >/dev/null 2>&1; then
     echo "Rendering Helm charts..."
     
     helm repo add traefik https://traefik.github.io/charts 2>/dev/null || true
+    helm repo add cilium https://helm.cilium.io 2>/dev/null || true
     helm repo add cnpg https://cloudnative-pg.github.io/charts 2>/dev/null || true
     helm repo add bitnami https://charts.bitnami.com/bitnami 2>/dev/null || true
     helm repo add grafana https://grafana.github.io/helm-charts 2>/dev/null || true
@@ -35,6 +36,10 @@ if command -v helm >/dev/null 2>&1; then
     
     mkdir -p "$OUTPUT_DIR/helm"
     
+    helm template cilium cilium/cilium \
+        --values "$PROJECT_ROOT/platform/helm-values/cilium-values.yaml" \
+        --namespace kube-system > "$OUTPUT_DIR/helm/cilium.yaml" 2>/dev/null || echo "Warning: Failed to render cilium"
+
     helm template traefik traefik/traefik \
         --values "$PROJECT_ROOT/platform/helm-values/traefik-values.yaml" \
         --namespace traefik > "$OUTPUT_DIR/helm/traefik.yaml" 2>/dev/null || echo "Warning: Failed to render traefik"

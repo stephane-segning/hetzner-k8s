@@ -62,8 +62,8 @@ terraform -chdir=terraform/envs/prod apply \
 If k3s fails on the server node:
 
 ```bash
-# SSH to server
-ssh root@$(terraform -chdir=terraform/envs/prod output -raw first_node_ip)
+# SSH to bootstrap control-plane
+ssh root@$(terraform -chdir=terraform/envs/prod output -raw first_control_plane_ip)
 
 # Check status
 systemctl status k3s
@@ -78,7 +78,10 @@ curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC=server sh -s - \
   --token=$TOKEN \
   --cluster-init \
   --disable traefik \
-  --disable servicelb
+  --disable servicelb \
+  --disable local-storage \
+  --disable-network-policy \
+  --flannel-backend=none
 ```
 
 ### Etcd Issues
@@ -146,6 +149,28 @@ kubectl get svc -n traefik traefik -o yaml | grep -A10 annotations
 
 # Restart Traefik
 kubectl rollout restart deployment traefik -n traefik
+```
+
+### Cilium Issues
+
+```bash
+# Check Cilium state
+kubectl get pods -n kube-system -l k8s-app=cilium
+kubectl get pods -n kube-system -l name=cilium-operator
+
+# Restart Cilium components
+kubectl rollout restart daemonset cilium -n kube-system
+kubectl rollout restart deployment cilium-operator -n kube-system
+```
+
+If K3s must be fully uninstalled from a node, remove the Cilium interfaces first to avoid losing host connectivity:
+
+```bash
+ip link delete cilium_host || true
+ip link delete cilium_net || true
+ip link delete cilium_vxlan || true
+iptables-save | grep -iv cilium | iptables-restore
+ip6tables-save | grep -iv cilium | ip6tables-restore
 ```
 
 ## Data Recovery

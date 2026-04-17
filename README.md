@@ -9,6 +9,7 @@ This repository provisions a **Hetzner-hosted k3s cluster** on Hetzner Cloud wit
 - **Control plane**: 3 `CPX22` control-plane nodes by default
 - **Workers**: 2 `CPX42` worker nodes by default
 - **Cluster API**: Terraform-managed Hetzner TCP load balancer on `:6443`
+- **CNI**: Cilium
 - **Ingress**: Traefik exposed through a Kubernetes-managed Hetzner Load Balancer
 - **Storage**: Hetzner CSI driver for persistent volumes
 - **Networking**: Private network with firewall protection
@@ -28,10 +29,13 @@ This repository provisions a **Hetzner-hosted k3s cluster** on Hetzner Cloud wit
 - cloud-init driven k3s cluster initialization
 - first control-plane bootstraps the cluster
 - remaining control-plane and worker nodes join deterministically
+- swap disabled on every node before k3s starts
+- k3s built-ins for flannel, local-storage, servicelb, and network-policy are disabled
 - kubeconfig retrieval
 - Cluster readiness verification
 
 ### Platform (manifests/helm)
+- Cilium CNI
 - Hetzner Cloud Controller Manager (CCM)
 - Hetzner CSI driver
 - Traefik ingress controller
@@ -159,8 +163,8 @@ make test
 If only k3s needs reinstall:
 
 ```bash
-./bootstrap/scripts/reset-k3s.sh
-./bootstrap/scripts/bootstrap.sh
+ssh root@<node-ip> sudo /usr/local/bin/k3s-uninstall.sh
+make bootstrap
 ```
 
 ## Cost Estimate
@@ -177,6 +181,7 @@ If only k3s needs reinstall:
 
 - Private networking only (no public DB/Redis)
 - Direct node public access to `6443` is disabled by default
+- Swap is disabled on all nodes
 - Default-deny NetworkPolicies
 - Firewall restricts to necessary ports
 - No sensitive data in Git (use tfvars for secrets)

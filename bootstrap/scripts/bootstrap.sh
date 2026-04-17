@@ -110,30 +110,30 @@ wait_for_cluster() {
 
 verify_cluster() {
     log "Verifying cluster..."
-    
+
     local max_attempts=90
     local attempt=1
-    local ready_nodes=0
+    local registered_nodes=0
 
     while [ $attempt -le $max_attempts ]; do
-        ready_nodes=$(ssh "root@$FIRST_CONTROL_PLANE_IP" "kubectl get nodes --no-headers 2>/dev/null | grep -c ' Ready '" || echo "0")
+        registered_nodes=$(ssh "root@$FIRST_CONTROL_PLANE_IP" "kubectl get nodes --no-headers 2>/dev/null | wc -l | tr -d ' '" || echo "0")
 
-        if [ "$ready_nodes" -ge "$EXPECTED_NODES" ]; then
+        if [ "$registered_nodes" -ge "$EXPECTED_NODES" ]; then
             break
         fi
 
         attempt=$((attempt + 1))
-        log "Waiting for nodes to be Ready ($ready_nodes/$EXPECTED_NODES)..."
+        log "Waiting for nodes to register ($registered_nodes/$EXPECTED_NODES)..."
         sleep 5
     done
 
     ssh "root@$FIRST_CONTROL_PLANE_IP" "kubectl get nodes -o wide"
 
-    if [ "$ready_nodes" -lt "$EXPECTED_NODES" ]; then
-        error "Only $ready_nodes/$EXPECTED_NODES nodes are Ready"
+    if [ "$registered_nodes" -lt "$EXPECTED_NODES" ]; then
+        error "Only $registered_nodes/$EXPECTED_NODES nodes registered with the API"
     fi
 
-    log "All $ready_nodes nodes are Ready"
+    log "All $registered_nodes nodes registered. Install Cilium before expecting Ready status."
 }
 
 get_kubeconfig() {
@@ -164,8 +164,8 @@ main() {
     log ""
     log "Next steps:"
     log "  1. export KUBECONFIG=$PROJECT_ROOT/kubeconfig"
-    log "  2. kubectl get nodes"
-    log "  3. Apply platform: kubectl apply -k platform/base/"
+    log "  2. Install Cilium and the rest of the platform via Argo CD or Helm"
+    log "  3. kubectl get nodes"
 }
 
 main "$@"

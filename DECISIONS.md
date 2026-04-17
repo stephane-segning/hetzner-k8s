@@ -61,6 +61,44 @@ This document records key decisions made during the design of this platform.
 - k0s: Less community documentation
 - Talos: More opinionated, steeper learning curve
 
+### CNI: Cilium
+
+**Decision**: Use Cilium instead of the default K3s Flannel CNI
+
+**Rationale**:
+- Gives a more capable networking and policy layer for future growth
+- Fits the intent to enforce NetworkPolicies from the start
+- Keeps the bootstrap explicit by disabling Flannel and installing the CNI deliberately
+
+**Implementation**:
+- Start k3s with `--flannel-backend=none`
+- Disable the K3s network policy controller with `--disable-network-policy`
+- Install Cilium via Helm/Argo CD in `kube-system`
+
+### Swap: Disabled
+
+**Decision**: Disable swap on all nodes before k3s starts
+
+**Rationale**:
+- Avoids kubelet instability and scheduling surprises in a default Kubernetes setup
+- Matches common Kubernetes guidance unless NodeSwap is intentionally designed and tested
+
+**Implementation**:
+- `swapoff -a`
+- comment swap entries in `/etc/fstab`
+- mask `swap.target`
+
+### K3s Local Storage: Disabled
+
+**Decision**: Disable K3s `local-storage`
+
+**Rationale**:
+- Avoids mixed storage ownership and accidental use of node-local PVCs
+- Keeps persistent storage on the Hetzner CSI path from day one
+
+**Implementation**:
+- Start k3s with `--disable local-storage`
+
 ## Networking
 
 ### Private Network Only

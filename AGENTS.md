@@ -36,6 +36,9 @@ This repository is operated as infrastructure code for a Hetzner-hosted k3s clus
 
 - Prefer small, explicit changes.
 - Keep node roles deterministic.
+- Keep Cilium as the cluster CNI unless the user explicitly requests a networking redesign.
+- Keep swap disabled and do not re-enable it implicitly.
+- Keep K3s `local-storage` disabled; persistent storage should go through Hetzner CSI.
 - Do not reintroduce mixed ownership for load balancers.
 - Do not add local-only operational paths as the main documented flow.
 - If a workflow depends on Terraform state, assume remote backend usage.

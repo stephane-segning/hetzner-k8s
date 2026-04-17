@@ -1,0 +1,33 @@
+kubeProxyReplacement: "false"
+
+ipam:
+  mode: kubernetes
+
+routingMode: tunnel
+tunnelProtocol: vxlan
+
+rollOutCiliumPods: true
+
+operator:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+gatewayAPI:
+  enabled: false
+
+hubble:
+  enabled: false
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

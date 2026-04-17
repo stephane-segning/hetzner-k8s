@@ -17,9 +17,6 @@ override.tf.json
 .terraformrc
 terraform.rc
 
-# Copied templates
-terraform/envs/prod/node.yaml
-
 # Secrets
 *.pem
 *.key

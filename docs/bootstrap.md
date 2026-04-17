@@ -64,30 +64,43 @@ make bootstrap
 
 This script will:
 1. Wait for SSH access on all nodes
-2. Wait for cloud-init to bootstrap k3s on the first control-plane
+2. Wait for cloud-init to disable swap and bootstrap k3s on the first control-plane
 3. Wait for the API server to be ready
 4. Wait for the remaining control-plane and worker nodes to join
 5. Verify the cluster
 6. Retrieve the kubeconfig
+
+At this point the nodes are expected to be registered but may not be `Ready` until Cilium is installed.
 
 **Expected output:**
 ```
 ==> Starting k3s cluster bootstrap
 ==> Checking prerequisites...
 ==> Getting Terraform outputs...
-==> Bootstrapping server node (xxx.xxx.xxx.xxx)...
-==> Waiting for k3s server to be ready...
-==> Bootstrapping agent nodes...
+==> Waiting for SSH on nodes...
+==> Waiting for k3s API...
 ==> Verifying cluster...
 NAME        STATUS   ROLES                       AGE   VERSION
-k8s-1       Ready    control-plane,etcd,master   1m    v1.xx.x+k3s.x
-k8s-2       Ready    <none>                      30s   v1.xx.x+k3s.x
-k8s-3       Ready    <none>                      30s   v1.xx.x+k3s.x
+hetzner-k8s-cp-1   NotReady   control-plane,etcd,master   1m    v1.xx.x+k3s.x
+hetzner-k8s-cp-2   NotReady   control-plane,etcd,master   30s   v1.xx.x+k3s.x
+hetzner-k8s-worker-1 NotReady <none>            30s   v1.xx.x+k3s.x
 ==> Retrieving kubeconfig...
 ==> Bootstrap complete!
 ```
 
-## Step 6: Verify Cluster
+## Step 6: Install Cilium
+
+Install Cilium before expecting node readiness:
+
+```bash
+helm repo add cilium https://helm.cilium.io
+helm repo update
+helm install cilium cilium/cilium \
+  --namespace kube-system \
+  --values platform/helm-values/cilium-values.yaml
+```
+
+## Step 7: Verify Cluster
 
 ```bash
 export KUBECONFIG=$(pwd)/kubeconfig
@@ -95,7 +108,7 @@ kubectl get nodes -o wide
 kubectl get pods -A
 ```
 
-## Step 7: Apply Platform Components
+## Step 8: Apply Platform Components
 
 Install the Hetzner CCM and CSI:
 
@@ -114,7 +127,7 @@ kubectl apply -f platform/base/hcloud-ccm.yaml
 kubectl apply -f platform/base/hcloud-csi.yaml
 ```
 
-## Step 8: Install Traefik with Helm
+## Step 9: Install Traefik with Helm
 
 ```bash
 helm repo add traefik https://traefik.github.io/charts
@@ -125,7 +138,7 @@ helm install traefik traefik/traefik \
   --values platform/helm-values/traefik-values.yaml
 ```
 
-## Step 9: Verify Platform
+## Step 10: Verify Platform
 
 ```bash
 # Check all pods are running
@@ -154,6 +167,9 @@ curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC=server sh -s - \
   --cluster-init \
   --disable traefik \
   --disable servicelb \
+  --disable local-storage \
+  --disable-network-policy \
+  --flannel-backend=none \
   --write-kubeconfig-mode "0644"
 ```
 
@@ -170,6 +186,9 @@ curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC=server sh -s - \
   --token=$TOKEN \
   --disable traefik \
   --disable servicelb \
+  --disable local-storage \
+  --disable-network-policy \
+  --flannel-backend=none \
   --write-kubeconfig-mode "0644"
 
 # Worker nodes join with INSTALL_K3S_EXEC=agent
@@ -191,6 +210,12 @@ curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC=agent sh -s - \
 - Check logs: `journalctl -u k3s -f`
 - Verify node has sufficient resources
 - Check network connectivity
+
+### Nodes Stay NotReady
+
+- Install Cilium first; k3s is started without Flannel
+- Check Cilium pods: `kubectl get pods -n kube-system -l k8s-app=cilium`
+- Verify swap is disabled: `swapon --show`
 
 ### Agent Can't Join
 

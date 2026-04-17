@@ -48,26 +48,48 @@ spec:
   generators:
     - list:
         elements:
+          - name: cilium
+            chart: cilium
+            repoURL: https://helm.cilium.io
+            targetRevision: "*"
+            namespace: kube-system
+            values: platform/helm-values/cilium-values.yaml
+            syncWave: "0"
           - name: traefik
-            chart: traefik/traefik
+            chart: traefik
+            repoURL: https://traefik.github.io/charts
+            targetRevision: "*"
             namespace: traefik
             values: platform/helm-values/traefik-values.yaml
+            syncWave: "10"
           - name: cnpg
-            chart: cnpg/cloudnative-pg
+            chart: cloudnative-pg
+            repoURL: https://cloudnative-pg.github.io/charts
+            targetRevision: "*"
             namespace: cnpg-system
             values: platform/helm-values/cnpg-values.yaml
+            syncWave: "20"
           - name: redis
-            chart: bitnami/redis
+            chart: redis
+            repoURL: https://charts.bitnami.com/bitnami
+            targetRevision: "*"
             namespace: data
             values: platform/helm-values/redis-values.yaml
+            syncWave: "20"
           - name: alloy
-            chart: grafana/alloy
+            chart: alloy
+            repoURL: https://grafana.github.io/helm-charts
+            targetRevision: "*"
             namespace: observability
             values: platform/helm-values/alloy-values.yaml
+            syncWave: "20"
           - name: kube-state-metrics
-            chart: prometheus-community/kube-state-metrics
+            chart: kube-state-metrics
+            repoURL: https://prometheus-community.github.io/helm-charts
+            targetRevision: "*"
             namespace: observability
             values: platform/helm-values/kube-state-metrics-values.yaml
+            syncWave: "20"
   template:
     metadata:
       name: '{{name}}'
@@ -75,15 +97,20 @@ spec:
         cluster: hetzner-k8s
         managed-by: applicationset
         type: helm
+      annotations:
+        argocd.argoproj.io/sync-wave: '{{syncWave}}'
     spec:
       project: default
-      source:
-        repoURL: ${REPO_URL}
-        targetRevision: HEAD
-        path: .
-        helm:
-          valueFiles:
-            - '{{values}}'
+      sources:
+        - repoURL: '{{repoURL}}'
+          chart: '{{chart}}'
+          targetRevision: '{{targetRevision}}'
+          helm:
+            valueFiles:
+              - '$values/{{values}}'
+        - repoURL: ${REPO_URL}
+          targetRevision: HEAD
+          ref: values
       destination:
         server: ${CLUSTER_URL}
         namespace: '{{namespace}}'

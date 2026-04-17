@@ -16,6 +16,19 @@ packages:
   - fail2ban
 
 write_files:
+  - path: /etc/modules-load.d/k8s.conf
+    content: |
+      overlay
+      br_netfilter
+    permissions: '0644'
+
+  - path: /etc/sysctl.d/90-kubernetes.conf
+    content: |
+      net.bridge.bridge-nf-call-iptables = 1
+      net.bridge.bridge-nf-call-ip6tables = 1
+      net.ipv4.ip_forward = 1
+    permissions: '0644'
+
   - path: /opt/k3s-bootstrap.sh
     content: |
       #!/bin/bash
@@ -28,7 +41,18 @@ write_files:
       }
       
       log "Starting k3s bootstrap"
-      
+
+      # Kubernetes nodes should not run with swap enabled unless NodeSwap
+      # is explicitly designed and tested for the cluster.
+      swapoff -a || true
+      sed -i.bak '/\sswap\s/s/^/# /' /etc/fstab || true
+      rm -f /etc/fstab.bak
+      systemctl mask swap.target >/dev/null 2>&1 || true
+
+      modprobe overlay || true
+      modprobe br_netfilter || true
+      sysctl --system >/dev/null 2>&1 || true
+
       K3S_TOKEN="${k3s_token}"
       K3S_ROLE="${k3s_role}"
       BOOTSTRAP_SERVER_IP="${bootstrap_server_ip}"
@@ -51,6 +75,9 @@ write_files:
             --cluster-init \
             --disable traefik \
             --disable servicelb \
+            --disable local-storage \
+            --disable-network-policy \
+            --flannel-backend=none \
             --write-kubeconfig-mode "0644"%{ if extra_server_args != "" } \
             ${extra_server_args}%{ endif }
 %{ else ~}
@@ -66,6 +93,9 @@ write_files:
             --token "$K3S_TOKEN" \
             --disable traefik \
             --disable servicelb \
+            --disable local-storage \
+            --disable-network-policy \
+            --flannel-backend=none \
             --write-kubeconfig-mode "0644"%{ if extra_server_args != "" } \
             ${extra_server_args}%{ endif }
 %{ endif ~}
