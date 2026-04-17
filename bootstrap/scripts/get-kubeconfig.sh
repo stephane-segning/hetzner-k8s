@@ -11,7 +11,7 @@ log() {
 
 cd "$TF_DIR"
 
-FIRST_NODE_IP=$(terraform output -raw first_node_ip)
+FIRST_NODE_IP=$(terraform output -raw first_control_plane_ip)
 
 log "Retrieving kubeconfig from $FIRST_NODE_IP..."
 

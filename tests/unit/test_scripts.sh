@@ -39,7 +39,8 @@ test_function_exists() {
 }
 
 test_function_exists "$PROJECT_ROOT/bootstrap/scripts/bootstrap.sh" "check_prerequisites"
-test_function_exists "$PROJECT_ROOT/bootstrap/scripts/bootstrap.sh" "bootstrap_server"
+test_function_exists "$PROJECT_ROOT/bootstrap/scripts/bootstrap.sh" "wait_for_nodes"
+test_function_exists "$PROJECT_ROOT/bootstrap/scripts/bootstrap.sh" "wait_for_cluster"
 
 echo ""
 if [ $errors -gt 0 ]; then

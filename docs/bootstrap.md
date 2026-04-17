@@ -43,8 +43,8 @@ make plan
 Review the plan output. You should see:
 - 1 private network
 - 1 firewall
-- 3 servers
-- 1 load balancer
+- 3 control-plane servers by default
+- 0 worker servers by default
 
 ## Step 4: Apply Infrastructure
 
@@ -64,9 +64,9 @@ make bootstrap
 
 This script will:
 1. Wait for SSH access on all nodes
-2. Install k3s on the first node (server/leader)
+2. Wait for cloud-init to bootstrap k3s on the first control-plane
 3. Wait for the API server to be ready
-4. Join remaining nodes as agents
+4. Wait for the remaining control-plane and worker nodes to join
 5. Verify the cluster
 6. Retrieve the kubeconfig
 
@@ -100,18 +100,9 @@ kubectl get pods -A
 Install the Hetzner CCM and CSI:
 
 ```bash
-# First, create secrets with your Hetzner token
-HCLOUD_TOKEN=$(terraform -chdir=terraform/envs/prod output -raw hcloud_token)
-HCLOUD_NETWORK=$(terraform -chdir=terraform/envs/prod output -raw network_id)
-
-# Create hcloud secret for CCM
-kubectl create secret generic hcloud -n kube-system \
-  --from-literal=token=$HCLOUD_TOKEN \
-  --from-literal=network=$HCLOUD_NETWORK
-
-# Create hcloud-csi secret
-kubectl create secret generic hcloud-csi -n kube-system \
-  --from-literal=token=$HCLOUD_TOKEN
+# Render secret manifests from Terraform outputs
+terraform -chdir=terraform/envs/prod output -raw hcloud_ccm_secret_manifest | kubectl apply -f -
+terraform -chdir=terraform/envs/prod output -raw hcloud_csi_secret_manifest | kubectl apply -f -
 
 # Apply platform manifests
 kubectl apply -f platform/base/namespaces.yaml
@@ -151,11 +142,11 @@ kubectl get nodes -o wide
 
 If the automated bootstrap fails, you can manually bootstrap:
 
-### Initialize Server Node
+### Initialize Bootstrap Control-Plane
 
 ```bash
 # SSH to first node
-ssh root@$(terraform -chdir=terraform/envs/prod output -raw first_node_ip)
+ssh root@$(terraform -chdir=terraform/envs/prod output -raw first_control_plane_ip)
 
 # Install k3s server
 curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC=server sh -s - \
@@ -166,14 +157,22 @@ curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC=server sh -s - \
   --write-kubeconfig-mode "0644"
 ```
 
-### Join Agent Nodes
+### Join Additional Nodes
 
 ```bash
-# Get server private IP
-SERVER_PRIVATE_IP=$(terraform -chdir=terraform/envs/prod output -raw first_node_private_ip)
+# Get bootstrap control-plane private IP
+SERVER_PRIVATE_IP=$(terraform -chdir=terraform/envs/prod output -raw first_control_plane_private_ip)
 TOKEN=$(terraform -chdir=terraform/envs/prod output -raw k3s_token)
 
-# SSH to each agent node and run
+# Additional control-plane nodes join with INSTALL_K3S_EXEC=server
+curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC=server sh -s - \
+  --server=https://$SERVER_PRIVATE_IP:6443 \
+  --token=$TOKEN \
+  --disable traefik \
+  --disable servicelb \
+  --write-kubeconfig-mode "0644"
+
+# Worker nodes join with INSTALL_K3S_EXEC=agent
 curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC=agent sh -s - \
   --server=https://$SERVER_PRIVATE_IP:6443 \
   --token=$TOKEN

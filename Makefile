@@ -74,7 +74,7 @@ verify:
 nodes:
 	@kubectl get nodes -o wide
 
-test: test-tf test-render test-scripts
+test: test-tf test-render test-unit test-scripts
 	@echo "==> All tests passed"
 
 test-tf:
@@ -85,6 +85,11 @@ test-tf:
 test-render:
 	@echo "==> Testing manifest rendering"
 	@./tests/render/validate-all.sh
+
+test-unit:
+	@echo "==> Running unit tests"
+	@./tests/unit/test_terraform.sh
+	@./tests/unit/test_scripts.sh
 
 test-scripts:
 	@echo "==> Testing scripts"
@@ -121,5 +126,5 @@ clean:
 show-costs:
 	@echo "==> Estimated monthly costs"
 	@echo "3x CPX42 servers: €49.20"
-	@echo "1x LB11 load balancer: €5.83"
+	@echo "1x Kubernetes-managed Hetzner LB: €5.83"
 	@echo "Estimated total: ~€55/month"

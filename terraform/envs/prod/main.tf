@@ -127,7 +127,7 @@ locals {
       name       = format("%s-cp-%d", var.cluster_name, index + 1)
       role       = "control-plane"
       private_ip = cidrhost(module.network.subnet_ip_range, 10 + index)
-      user_data = base64encode(templatefile("${path.module}/../../../bootstrap/cloud-init/node.yaml", {
+      user_data = templatefile("${path.module}/../../../bootstrap/cloud-init/node.yaml", {
         k3s_version         = var.k3s_version
         k3s_token           = local.k3s_token
         k3s_role            = "control-plane"
@@ -135,7 +135,7 @@ locals {
         bootstrap_server_ip = local.bootstrap_server_private_ip
         extra_server_args   = var.extra_server_args
         extra_agent_args    = var.extra_agent_args
-      }))
+      })
       labels = {
         node_pool = "control-plane"
       }
@@ -147,7 +147,7 @@ locals {
       name       = format("%s-worker-%d", var.cluster_name, index + 1)
       role       = "worker"
       private_ip = cidrhost(module.network.subnet_ip_range, 20 + index)
-      user_data = base64encode(templatefile("${path.module}/../../../bootstrap/cloud-init/node.yaml", {
+      user_data = templatefile("${path.module}/../../../bootstrap/cloud-init/node.yaml", {
         k3s_version         = var.k3s_version
         k3s_token           = local.k3s_token
         k3s_role            = "worker"
@@ -155,7 +155,7 @@ locals {
         bootstrap_server_ip = local.bootstrap_server_private_ip
         extra_server_args   = var.extra_server_args
         extra_agent_args    = var.extra_agent_args
-      }))
+      })
       labels = {
         node_pool = "worker"
       }
@@ -189,10 +189,6 @@ stringData:
   token: "${var.hcloud_token}"
 EOT
 
-  platform_secrets = {
-    hcloud_ccm = sensitive(local.hcloud_ccm_secret)
-    hcloud_csi = sensitive(local.hcloud_csi_secret)
-  }
 }
 
 resource "random_password" "k3s_token" {

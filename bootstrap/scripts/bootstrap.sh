@@ -43,18 +43,20 @@ get_outputs() {
         error "No terraform state found. Run 'make apply' first."
     fi
     
-    FIRST_NODE_IP=$(terraform output -raw first_node_ip)
-    FIRST_NODE_PRIVATE_IP=$(terraform output -raw first_node_private_ip)
-    K3S_TOKEN=$(terraform output -raw k3s_token)
-    NODE_IPS=$(terraform output -json ipv4_addresses | jq -r '.public[]')
+    FIRST_CONTROL_PLANE_IP=$(terraform output -raw first_control_plane_ip)
+    FIRST_CONTROL_PLANE_PRIVATE_IP=$(terraform output -raw first_control_plane_private_ip)
+    CONTROL_PLANE_IPS=$(terraform output -json control_plane_public_ips | jq -r '.[]')
+    WORKER_IPS=$(terraform output -json worker_public_ips | jq -r '.[]?')
+    EXPECTED_NODES=$(terraform output -json server_details | jq 'length')
     
-    export FIRST_NODE_IP
-    export FIRST_NODE_PRIVATE_IP
-    export K3S_TOKEN
-    export NODE_IPS
+    export FIRST_CONTROL_PLANE_IP
+    export FIRST_CONTROL_PLANE_PRIVATE_IP
+    export CONTROL_PLANE_IPS
+    export WORKER_IPS
+    export EXPECTED_NODES
     
-    log "First node IP: $FIRST_NODE_IP"
-    log "First node private IP: $FIRST_NODE_PRIVATE_IP"
+    log "Bootstrap control-plane IP: $FIRST_CONTROL_PLANE_IP"
+    log "Bootstrap control-plane private IP: $FIRST_CONTROL_PLANE_PRIVATE_IP"
 }
 
 wait_for_ssh() {
@@ -77,79 +79,68 @@ wait_for_ssh() {
     error "SSH not available on $ip after $max_attempts attempts"
 }
 
-bootstrap_server() {
-    log "Bootstrapping server node ($FIRST_NODE_IP)..."
-    
-    wait_for_ssh "$FIRST_NODE_IP"
-    
-    ssh "root@$FIRST_NODE_IP" "curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC='server' sh -s - \
-        --token='$K3S_TOKEN' \
-        --cluster-init \
-        --disable traefik \
-        --disable servicelb \
-        --write-kubeconfig-mode '0644'"
-    
-    log "Waiting for k3s server to be ready..."
-    
-    until ssh "root@$FIRST_NODE_IP" "kubectl get nodes" 2>/dev/null; do
-        log "Waiting for k3s server..."
-        sleep 5
+wait_for_nodes() {
+    log "Waiting for all nodes to become reachable..."
+
+    for ip in $CONTROL_PLANE_IPS; do
+        wait_for_ssh "$ip"
     done
-    
-    log "Server node ready"
+
+    for ip in $WORKER_IPS; do
+        wait_for_ssh "$ip"
+    done
 }
 
-bootstrap_agents() {
-    local agent_ips=()
-    
-    for ip in $NODE_IPS; do
-        if [ "$ip" != "$FIRST_NODE_IP" ]; then
-            agent_ips+=("$ip")
+wait_for_cluster() {
+    local max_attempts=90
+    local attempt=1
+
+    log "Waiting for k3s API on $FIRST_CONTROL_PLANE_IP..."
+
+    until ssh "root@$FIRST_CONTROL_PLANE_IP" "kubectl get nodes >/dev/null 2>&1"; do
+        if [ $attempt -ge $max_attempts ]; then
+            error "k3s API did not become ready in time"
         fi
+
+        attempt=$((attempt + 1))
+        log "Waiting for k3s API..."
+        sleep 5
     done
-    
-    if [ ${#agent_ips[@]} -eq 0 ]; then
-        log "No agent nodes to bootstrap"
-        return 0
-    fi
-    
-    for ip in "${agent_ips[@]}"; do
-        log "Bootstrapping agent node ($ip)..."
-        
-        wait_for_ssh "$ip"
-        
-        ssh "root@$ip" "curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC='agent' sh -s - \
-            --server='https://$FIRST_NODE_PRIVATE_IP:6443' \
-            --token='$K3S_TOKEN'" &
-    done
-    
-    wait
-    
-    log "Agent nodes bootstrapped"
 }
 
 verify_cluster() {
     log "Verifying cluster..."
     
-    ssh "root@$FIRST_NODE_IP" "kubectl get nodes -o wide"
-    
-    local expected_nodes
-    expected_nodes=$(echo "$NODE_IPS" | wc -l)
-    local ready_nodes
-    ready_nodes=$(ssh "root@$FIRST_NODE_IP" "kubectl get nodes --no-headers | grep -c Ready" || echo "0")
-    
-    if [ "$ready_nodes" -lt "$expected_nodes" ]; then
-        log "Warning: Only $ready_nodes/$expected_nodes nodes are Ready"
-    else
-        log "All $ready_nodes nodes are Ready"
+    local max_attempts=90
+    local attempt=1
+    local ready_nodes=0
+
+    while [ $attempt -le $max_attempts ]; do
+        ready_nodes=$(ssh "root@$FIRST_CONTROL_PLANE_IP" "kubectl get nodes --no-headers 2>/dev/null | grep -c ' Ready '" || echo "0")
+
+        if [ "$ready_nodes" -ge "$EXPECTED_NODES" ]; then
+            break
+        fi
+
+        attempt=$((attempt + 1))
+        log "Waiting for nodes to be Ready ($ready_nodes/$EXPECTED_NODES)..."
+        sleep 5
+    done
+
+    ssh "root@$FIRST_CONTROL_PLANE_IP" "kubectl get nodes -o wide"
+
+    if [ "$ready_nodes" -lt "$EXPECTED_NODES" ]; then
+        error "Only $ready_nodes/$EXPECTED_NODES nodes are Ready"
     fi
+
+    log "All $ready_nodes nodes are Ready"
 }
 
 get_kubeconfig() {
     log "Retrieving kubeconfig..."
     
-    ssh "root@$FIRST_NODE_IP" "cat /etc/rancher/k3s/k3s.yaml" | \
-        sed "s/127.0.0.1/$FIRST_NODE_IP/g" > "$PROJECT_ROOT/kubeconfig"
+    ssh "root@$FIRST_CONTROL_PLANE_IP" "cat /etc/rancher/k3s/k3s.yaml" | \
+        sed "s/127.0.0.1/$FIRST_CONTROL_PLANE_IP/g" > "$PROJECT_ROOT/kubeconfig"
     
     chmod 600 "$PROJECT_ROOT/kubeconfig"
     
@@ -161,8 +152,8 @@ main() {
     
     check_prerequisites
     get_outputs
-    bootstrap_server
-    bootstrap_agents
+    wait_for_nodes
+    wait_for_cluster
     verify_cluster
     get_kubeconfig
     

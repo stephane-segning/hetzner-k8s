@@ -14,14 +14,16 @@ service:
 
 ports:
   web:
-    redirections:
-      entryPoint:
-        to: websecure
-        scheme: https
-        permanent: true
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
   websecure:
-    tls:
-      enabled: true
+    http:
+      tls:
+        enabled: true
 
 ingressRoute:
   dashboard:
@@ -63,17 +65,19 @@ topologySpreadConstraints:
       matchLabels:
         app.kubernetes.io/name: traefik
 
-security:
-  podSecurityContext:
-    runAsNonRoot: true
-    runAsGroup: 65532
-    runAsUser: 65532
-    fsGroup: 65532
-  containerSecurityContext:
-    capabilities:
-      drop:
-        - ALL
-    readOnlyRootFilesystem: true
+podSecurityContext:
+  runAsNonRoot: true
+  runAsGroup: 65532
+  runAsUser: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
 
 metrics:
   prometheus:

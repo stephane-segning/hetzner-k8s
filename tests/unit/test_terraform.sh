@@ -25,7 +25,8 @@ test_variable_default() {
 
 test_variable_default "cluster_name" "hetzner-k8s" "$PROJECT_ROOT/terraform/envs/prod/main.tf"
 test_variable_default "server_type" "cpx42" "$PROJECT_ROOT/terraform/envs/prod/main.tf"
-test_variable_default "server_count" "3" "$PROJECT_ROOT/terraform/envs/prod/main.tf"
+test_variable_default "control_plane_count" "3" "$PROJECT_ROOT/terraform/envs/prod/main.tf"
+test_variable_default "worker_count" "0" "$PROJECT_ROOT/terraform/envs/prod/main.tf"
 test_variable_default "location" "fsn1" "$PROJECT_ROOT/terraform/envs/prod/main.tf"
 
 echo ""
@@ -44,8 +45,8 @@ test_output_exists() {
 }
 
 test_output_exists "ipv4_addresses" "$PROJECT_ROOT/terraform/modules/server/outputs.tf"
-test_output_exists "first_node_public_ip" "$PROJECT_ROOT/terraform/modules/server/outputs.tf"
-test_output_exists "ipv4_address" "$PROJECT_ROOT/terraform/modules/loadbalancer/outputs.tf"
+test_output_exists "first_control_plane_public_ip" "$PROJECT_ROOT/terraform/modules/server/outputs.tf"
+test_output_exists "control_plane_public_ips" "$PROJECT_ROOT/terraform/modules/server/outputs.tf"
 test_output_exists "network_id" "$PROJECT_ROOT/terraform/modules/network/outputs.tf"
 
 echo ""

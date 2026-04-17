@@ -4,10 +4,10 @@ A production-ready, self-managed Kubernetes cluster on Hetzner Cloud for small p
 
 ## Overview
 
-This repository provisions a **3-node k3s cluster** on Hetzner Cloud with:
+This repository provisions a **Hetzner-hosted k3s cluster** on Hetzner Cloud with:
 
-- **Control plane**: 3 combined control-plane + worker nodes (CPX42)
-- **Ingress**: Traefik with Hetzner Load Balancer
+- **Control plane**: 3 control-plane nodes by default, with optional dedicated workers
+- **Ingress**: Traefik exposed through a Kubernetes-managed Hetzner Load Balancer
 - **Storage**: Hetzner CSI driver for persistent volumes
 - **Networking**: Private network with firewall protection
 - **Observability**: Grafana Alloy for telemetry collection
@@ -18,14 +18,15 @@ This repository provisions a **3-node k3s cluster** on Hetzner Cloud with:
 ### Infrastructure (Terraform)
 - Hetzner private network and subnet
 - Firewall rules (SSH, Kubernetes API, internal traffic)
-- 3 servers running Ubuntu 24.04 LTS
-- 1 Hetzner Load Balancer
+- Deterministic control-plane and worker nodes running Ubuntu 24.04 LTS
 - Optional data volumes
 
 ### Bootstrap (cloud-init/scripts)
-- k3s cluster initialization (1 server, 2 agents)
+- cloud-init driven k3s cluster initialization
+- first control-plane bootstraps the cluster
+- remaining control-plane and worker nodes join deterministically
 - kubeconfig retrieval
-- Cluster join automation
+- Cluster readiness verification
 
 ### Platform (manifests/helm)
 - Hetzner Cloud Controller Manager (CCM)
@@ -49,9 +50,10 @@ This repository provisions a **3-node k3s cluster** on Hetzner Cloud with:
 
 | Component | Owned By | Managed By |
 |-----------|----------|------------|
-| Hetzner infra (servers, network, LB) | Terraform | Terraform |
+| Hetzner infra (servers, network, firewall) | Terraform | Terraform |
 | OS bootstrap (k3s install) | Terraform | Terraform |
 | In-cluster platform (CCM, CSI, Traefik) | Argo CD | Argo CD |
+| Hetzner ingress load balancer | Kubernetes + Hetzner CCM | Kubernetes + Hetzner CCM |
 | Workloads (CNPG, Redis, apps) | Argo CD | Argo CD |
 | NetworkPolicies | Argo CD | Argo CD |
 
@@ -157,7 +159,7 @@ If only k3s needs reinstall:
 | Resource | Monthly Cost |
 |----------|--------------|
 | 3x CPX42 servers | ~€49.20 |
-| 1x LB11 load balancer | ~€5.83 |
+| 1x Hetzner LB via Traefik service | ~€5.83 |
 | Traffic (est.) | ~€5-10 |
 | **Total** | **~€60-65/month** |
 

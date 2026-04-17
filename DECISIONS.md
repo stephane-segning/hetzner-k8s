@@ -18,15 +18,15 @@ This document records key decisions made during the design of this platform.
 - CPX41 (smaller): Insufficient RAM for workloads + control plane
 - CPX51 (larger): Exceeds budget, overkill for initial setup
 
-### Node Count: 3 Combined Nodes
+### Node Layout: 3 Control-Plane Nodes, Optional Workers
 
-**Decision**: 3 nodes, each running both control-plane and workloads
+**Decision**: 3 control-plane nodes by default, with a separate worker count that starts at 0
 
 **Rationale**:
 - k3s supports embedded etcd for HA with 3 nodes
-- Simplifies operations vs separate control-plane nodes
-- Cost-effective for small platform
-- Can scale by adding worker-only nodes later
+- Keeps the initial cluster highly available
+- Gives deterministic node roles and private IPs
+- Leaves room to add dedicated worker pools later without redesigning Terraform
 
 **Risks**:
 - Workloads may impact control plane stability
@@ -78,15 +78,14 @@ This document records key decisions made during the design of this platform.
 - Hetzner private network (10.0.0.0/16)
 - Firewall allows only: SSH, API server, internal traffic
 
-### Load Balancer: Hetzner LB
+### Load Balancer: Kubernetes/CCM-managed Hetzner LB
 
-**Decision**: Use Hetzner Load Balancer for ingress
+**Decision**: Let Kubernetes Services create Hetzner Load Balancers through Hetzner CCM
 
 **Rationale**:
-- Managed service, no maintenance burden
-- Automatic health checks
-- Integrated with Hetzner CCM
-- Cost-effective (~€5.83/month for LB11)
+- Keeps ingress ownership in-cluster with the Traefik Service
+- Avoids split ownership between Terraform and Kubernetes
+- Matches the intended operational model for future GitOps handoff
 
 **Alternative**: Ingress directly on node IPs
 - Rejected: No HA, requires external LB or DNS failover

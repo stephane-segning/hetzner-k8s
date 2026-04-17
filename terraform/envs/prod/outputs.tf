@@ -10,7 +10,7 @@ output "k3s_token" {
 
 output "node_ips" {
   value = {
-    public  = module.servers.server_details
+    public  = module.servers.ipv4_addresses
     private = module.servers.private_ips
   }
   description = "Public and private IP addresses of nodes"
@@ -70,10 +70,16 @@ output "bootstrap_commands" {
   sensitive   = true
 }
 
-output "platform_secrets" {
-  value       = local.platform_secrets
+output "hcloud_ccm_secret_manifest" {
+  value       = local.hcloud_ccm_secret
   sensitive   = true
-  description = "Rendered secrets for Hetzner CCM and CSI"
+  description = "Rendered Hetzner CCM secret manifest"
+}
+
+output "hcloud_csi_secret_manifest" {
+  value       = local.hcloud_csi_secret
+  sensitive   = true
+  description = "Rendered Hetzner CSI secret manifest"
 }
 
 output "network_id" {
