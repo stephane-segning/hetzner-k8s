@@ -1,0 +1,34 @@
+architecture: standalone
+
+auth:
+  enabled: true
+
+commonConfiguration: |-
+  maxmemory-policy allkeys-lru
+
+master:
+  count: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  
+replica:
+  replicaCount: 0
+
+metrics:
+  enabled: false
+  serviceMonitor:
+    enabled: false
+
+networkPolicy:
+  enabled: true
+  allowExternal: false
+
+persistence:
+  enabled: true
+  storageClass: "hcloud-volumes"
+  size: 10Gi

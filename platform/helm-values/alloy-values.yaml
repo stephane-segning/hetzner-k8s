@@ -1,0 +1,64 @@
+alloy:
+  configMap:
+    content: |-
+      prometheus.exporter.self "alloy" {}
+      
+      prometheus.scrape "self" {
+        targets = prometheus.exporter.self.alloy.targets
+        forward_to = prometheus.remote_write.remote.receiver
+      }
+      
+      prometheus.remote_write "remote" {
+        endpoint {
+          url = env("REMOTE_WRITE_URL")
+          
+          basic_auth {
+            username = env("REMOTE_WRITE_USERNAME")
+            password = env("REMOTE_WRITE_PASSWORD")
+          }
+        }
+      }
+      
+      discovery.kubernetes "pods" {
+        role = "pod"
+      }
+      
+      prometheus.scrape "kubernetes_pods" {
+        targets = discovery.kubernetes.pods.targets
+        forward_to = prometheus.remote_write.remote.receiver
+        scrape_interval = "30s"
+      }
+
+  extraEnv:
+    - name: REMOTE_WRITE_URL
+      valueFrom:
+        secretKeyRef:
+          name: alloy-remote-write
+          key: url
+    - name: REMOTE_WRITE_USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: alloy-remote-write
+          key: username
+    - name: REMOTE_WRITE_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: alloy-remote-write
+          key: password
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+serviceMonitor:
+  enabled: false
+
+nodeSelector: {}
+
+tolerations: []
+
+priorityClassName: ""

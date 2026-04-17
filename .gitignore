@@ -1,0 +1,58 @@
+# Terraform
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+*.tfvars
+!*.tfvars.example
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Copied templates
+terraform/envs/prod/node.yaml
+
+# Secrets
+*.pem
+*.key
+*.crt
+kubeconfig
+kubeconfig.*
+*.kubeconfig
+secrets/
+.secrets/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test artifacts
+tests/unit/__pycache__/
+tests/render/output/
+.pytest_cache/
+coverage/
+*.cover
+
+# Build artifacts
+dist/
+build/
+*.tgz
+
+# Misc
+.env
+.env.*
+!.env.example
+TODO.md
+NOTES.md

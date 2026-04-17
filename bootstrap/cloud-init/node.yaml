@@ -1,0 +1,115 @@
+#cloud-config
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - curl
+  - wget
+  - apt-transport-https
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - htop
+  - jq
+  - tree
+  - fail2ban
+
+write_files:
+  - path: /opt/k3s-bootstrap.sh
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+      
+      LOG="/var/log/k3s-bootstrap.log"
+      
+      log() {
+          echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG"
+      }
+      
+      log "Starting k3s bootstrap"
+      
+      K3S_TOKEN="${k3s_token}"
+      K3S_ROLE="${k3s_role}"
+      BOOTSTRAP_SERVER_IP="${bootstrap_server_ip}"
+      INSTALL_K3S_VERSION="${k3s_version}"
+
+      if systemctl is-active --quiet k3s || systemctl is-active --quiet k3s-agent; then
+          log "k3s already active, skipping"
+          exit 0
+      fi
+
+      if [ "$INSTALL_K3S_VERSION" != "latest" ]; then
+          export INSTALL_K3S_VERSION
+      fi
+      
+      if [ "$K3S_ROLE" = "control-plane" ]; then
+%{ if initialize_cluster ~}
+          log "Initializing bootstrap control-plane"
+          curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server" sh -s - \
+            --token "$K3S_TOKEN" \
+            --cluster-init \
+            --disable traefik \
+            --disable servicelb \
+            --write-kubeconfig-mode "0644"%{ if extra_server_args != "" } \
+            ${extra_server_args}%{ endif }
+%{ else ~}
+          log "Waiting for bootstrap control-plane at $BOOTSTRAP_SERVER_IP"
+          until curl -sk "https://$BOOTSTRAP_SERVER_IP:6443/healthz" >/dev/null 2>&1; do
+              log "Waiting for control-plane API..."
+              sleep 5
+          done
+
+          log "Joining additional control-plane"
+          curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server" sh -s - \
+            --server "https://$BOOTSTRAP_SERVER_IP:6443" \
+            --token "$K3S_TOKEN" \
+            --disable traefik \
+            --disable servicelb \
+            --write-kubeconfig-mode "0644"%{ if extra_server_args != "" } \
+            ${extra_server_args}%{ endif }
+%{ endif ~}
+      else
+          log "Waiting for bootstrap control-plane at $BOOTSTRAP_SERVER_IP"
+          until curl -sk "https://$BOOTSTRAP_SERVER_IP:6443/healthz" >/dev/null 2>&1; do
+              log "Waiting for control-plane API..."
+              sleep 5
+          done
+          
+          log "Joining worker node"
+          curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="agent" sh -s - \
+            --server "https://$BOOTSTRAP_SERVER_IP:6443" \
+            --token "$K3S_TOKEN"%{ if extra_agent_args != "" } \
+            ${extra_agent_args}%{ endif }
+      fi
+      
+      log "k3s bootstrap complete"
+    permissions: '0755'
+
+  - path: /etc/systemd/system/k3s-bootstrap.service
+    content: |
+      [Unit]
+      Description=Bootstrap k3s node
+      After=network-online.target
+      Wants=network-online.target
+      
+      [Service]
+      Type=oneshot
+      ExecStart=/opt/k3s-bootstrap.sh
+      StandardOutput=journal
+      StandardError=journal
+      
+      [Install]
+      WantedBy=multi-user.target
+    permissions: '0644'
+
+runcmd:
+  - systemctl daemon-reload
+  - systemctl enable k3s-bootstrap
+  - systemctl start k3s-bootstrap
+
+final_message: |
+  k3s node bootstrap complete
+  $HOSTNAME: $(hostname)
+  IPv4: $(curl -s http://169.254.169.254/hetzner/v1/metadata/public-ipv4)
+  Private IP: $(curl -s http://169.254.169.254/hetzner/v1/metadata/private-network | jq -r '.ips[0].ip')

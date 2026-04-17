@@ -1,0 +1,47 @@
+replicaCount: 3
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+serviceMonitor:
+  enabled: false
+
+selfMonitor:
+  enabled: false
+
+collectors:
+  - nodes
+  - pods
+  - services
+  - namespaces
+  - endpoints
+  - secrets
+  - configmaps
+  - deployments
+  - daemonsets
+  - replicasets
+  - statefulsets
+  - jobs
+  - cronjobs
+  - persistentvolumes
+  - persistentvolumeclaims
+  - resourcequotas
+  - networkpolicies
+  - ingresses
+
+metricLabelsAllowlist:
+  - nodes=[topology.kubernetes.io/region,topology.kubernetes.io/zone]
+  - pods=[app.kubernetes.io/name,app.kubernetes.io/component,app.kubernetes.io/part-of]
+
+nodeSelector: {}
+
+tolerations: []
+
+topologySpreadConstraints: []
+
+priorityClassName: ""

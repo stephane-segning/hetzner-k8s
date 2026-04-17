@@ -1,0 +1,83 @@
+deployment:
+  replicas: 3
+  
+service:
+  enabled: true
+  type: LoadBalancer
+  annotations:
+    load-balancer.hetzner.cloud/name: "traefik-ingress"
+    load-balancer.hetzner.cloud/location: "fsn1"
+    load-balancer.hetzner.cloud/use-private-ip: "true"
+    load-balancer.hetzner.cloud/health-check-interval: "10s"
+    load-balancer.hetzner.cloud/health-check-timeout: "5s"
+    load-balancer.hetzner.cloud/health-check-retries: "3"
+
+ports:
+  web:
+    redirections:
+      entryPoint:
+        to: websecure
+        scheme: https
+        permanent: true
+  websecure:
+    tls:
+      enabled: true
+
+ingressRoute:
+  dashboard:
+    enabled: false
+
+providers:
+  kubernetesCRD:
+    enabled: true
+    allowCrossNamespace: true
+    allowExternalNameServices: true
+  kubernetesIngress:
+    enabled: true
+    allowExternalNameServices: true
+
+logs:
+  general:
+    level: INFO
+  access:
+    enabled: true
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+tolerations:
+  - key: "node-role.kubernetes.io/control-plane"
+    operator: "Exists"
+    effect: "NoSchedule"
+
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: DoNotSchedule
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: traefik
+
+security:
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsGroup: 65532
+    runAsUser: 65532
+    fsGroup: 65532
+  containerSecurityContext:
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: true
+
+metrics:
+  prometheus:
+    enabled: true
+    serviceMonitor:
+      enabled: false
+      namespace: observability

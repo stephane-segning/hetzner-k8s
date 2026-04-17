@@ -1,0 +1,59 @@
+variable "hcloud_token" {
+  default = "YOUR_HCLOUD_TOKEN"
+}
+
+variable "cluster_name" {
+  default = "hetzner-k8s"
+}
+
+variable "server_type" {
+  default = "cpx42"
+}
+
+variable "server_count" {
+  default = 3
+}
+
+variable "location" {
+  default = "fsn1"
+}
+
+variable "ssh_key_ids" {
+  default = []
+}
+
+variable "allowed_ssh_ips" {
+  default = ["YOUR_IP/32"]
+}
+
+variable "allowed_api_ips" {
+  default = ["0.0.0.0/0", "::/0"]
+}
+
+variable "load_balancer_type" {
+  default = "lb11"
+}
+
+variable "create_data_volumes" {
+  default = false
+}
+
+variable "data_volume_size_gb" {
+  default = 50
+}
+
+variable "k3s_version" {
+  default = "latest"
+}
+
+variable "k3s_token" {
+  default = ""
+}
+
+variable "extra_server_args" {
+  default = "--disable traefik --disable servicelb"
+}
+
+variable "extra_agent_args" {
+  default = ""
+}

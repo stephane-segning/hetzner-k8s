@@ -1,0 +1,96 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: hetzner-platform
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - name: namespaces
+            path: platform/base
+            namespace: ""
+          - name: hcloud-ccm
+            path: platform/base
+            namespace: kube-system
+          - name: hcloud-csi
+            path: platform/base
+            namespace: kube-system
+  template:
+    metadata:
+      name: '{{name}}'
+      labels:
+        cluster: hetzner-k8s
+        managed-by: applicationset
+    spec:
+      project: default
+      source:
+        repoURL: ${REPO_URL}
+        targetRevision: HEAD
+        path: '{{path}}'
+      destination:
+        server: ${CLUSTER_URL}
+        namespace: '{{namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: hetzner-helm
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - name: traefik
+            chart: traefik/traefik
+            namespace: traefik
+            values: platform/helm-values/traefik-values.yaml
+          - name: cnpg
+            chart: cnpg/cloudnative-pg
+            namespace: cnpg-system
+            values: platform/helm-values/cnpg-values.yaml
+          - name: redis
+            chart: bitnami/redis
+            namespace: data
+            values: platform/helm-values/redis-values.yaml
+          - name: alloy
+            chart: grafana/alloy
+            namespace: observability
+            values: platform/helm-values/alloy-values.yaml
+          - name: kube-state-metrics
+            chart: prometheus-community/kube-state-metrics
+            namespace: observability
+            values: platform/helm-values/kube-state-metrics-values.yaml
+  template:
+    metadata:
+      name: '{{name}}'
+      labels:
+        cluster: hetzner-k8s
+        managed-by: applicationset
+        type: helm
+    spec:
+      project: default
+      source:
+        repoURL: ${REPO_URL}
+        targetRevision: HEAD
+        path: .
+        helm:
+          valueFiles:
+            - '{{values}}'
+      destination:
+        server: ${CLUSTER_URL}
+        namespace: '{{namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
