@@ -12,9 +12,7 @@ terraform {
     }
   }
 
-  backend "local" {
-    path = "terraform.tfstate"
-  }
+  backend "s3" {}
 }
 
 provider "hcloud" {
@@ -76,9 +74,15 @@ variable "allowed_ssh_ips" {
 }
 
 variable "allowed_api_ips" {
-  description = "IPs allowed to access Kubernetes API (empty = any)"
+  description = "IPs allowed to access Kubernetes API directly on node public IPs"
   type        = list(string)
-  default     = ["0.0.0.0/0", "::/0"]
+  default     = []
+}
+
+variable "api_load_balancer_type" {
+  description = "Hetzner load balancer type for the Kubernetes API endpoint"
+  type        = string
+  default     = "lb11"
 }
 
 variable "create_data_volumes" {
@@ -232,4 +236,23 @@ module "servers" {
   nodes          = local.nodes
   create_volumes = var.create_data_volumes
   volume_size    = var.data_volume_size_gb
+}
+
+module "api_load_balancer" {
+  source = "../../modules/loadbalancer"
+
+  name              = "${var.cluster_name}-api"
+  type              = var.api_load_balancer_type
+  location          = var.location
+  network_id        = module.network.network_id
+  target_server_ids = [for key in sort(keys(local.control_plane_nodes)) : module.servers.server_ids[key]]
+  labels = merge(local.labels, {
+    role = "kubernetes-api"
+  })
+  use_private_ip        = true
+  service_protocol      = "tcp"
+  listen_port           = 6443
+  destination_port      = 6443
+  health_check_protocol = "tcp"
+  health_check_port     = 6443
 }

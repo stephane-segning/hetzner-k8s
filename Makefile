@@ -4,6 +4,7 @@
 TF_DIR ?= terraform/envs/prod
 TF_VARS ?= $(TF_DIR)/terraform.tfvars
 KUBECONFIG ?= kubeconfig
+BACKEND_CONFIG ?=
 
 .PHONY: help init plan apply destroy bootstrap verify test lint render fmt clean
 
@@ -40,7 +41,7 @@ help:
 
 init:
 	@echo "==> Initializing Terraform"
-	cd $(TF_DIR) && terraform init
+	cd $(TF_DIR) && terraform init $(if $(BACKEND_CONFIG),-backend-config=$(BACKEND_CONFIG),-backend=false)
 
 plan:
 	@echo "==> Planning Terraform changes"
@@ -80,7 +81,7 @@ test: test-tf test-render test-unit test-scripts
 test-tf:
 	@echo "==> Testing Terraform"
 	@terraform fmt -check -recursive terraform/
-	@cd $(TF_DIR) && terraform validate
+	@cd $(TF_DIR) && terraform init -backend=false >/dev/null && terraform validate
 
 test-render:
 	@echo "==> Testing manifest rendering"

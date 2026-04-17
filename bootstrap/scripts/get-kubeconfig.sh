@@ -12,11 +12,12 @@ log() {
 cd "$TF_DIR"
 
 FIRST_NODE_IP=$(terraform output -raw first_control_plane_ip)
+API_SERVER_IP=$(terraform output -raw api_load_balancer_ip)
 
 log "Retrieving kubeconfig from $FIRST_NODE_IP..."
 
 ssh "root@$FIRST_NODE_IP" "cat /etc/rancher/k3s/k3s.yaml" | \
-    sed "s/127.0.0.1/$FIRST_NODE_IP/g" > "$PROJECT_ROOT/kubeconfig"
+    sed "s/127.0.0.1/$API_SERVER_IP/g" > "$PROJECT_ROOT/kubeconfig"
 
 chmod 600 "$PROJECT_ROOT/kubeconfig"
 

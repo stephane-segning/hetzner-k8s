@@ -51,6 +51,21 @@ output "server_details" {
   description = "Details of all servers"
 }
 
+output "api_load_balancer_ip" {
+  value       = module.api_load_balancer.ipv4_address
+  description = "Public IPv4 address of the Kubernetes API load balancer"
+}
+
+output "api_load_balancer_ipv6" {
+  value       = module.api_load_balancer.ipv6_address
+  description = "Public IPv6 address of the Kubernetes API load balancer"
+}
+
+output "api_server_endpoint" {
+  value       = "https://${module.api_load_balancer.ipv4_address}:6443"
+  description = "Stable Kubernetes API endpoint for Argo CD and human operators"
+}
+
 output "kubeconfig_command" {
   value       = "ssh root@${module.servers.first_control_plane_public_ip} 'cat /etc/rancher/k3s/k3s.yaml'"
   description = "Command to retrieve kubeconfig"
@@ -64,7 +79,7 @@ output "kubeconfig_path" {
 output "bootstrap_commands" {
   value = {
     wait_cluster   = "make bootstrap"
-    get_kubeconfig = "ssh root@${module.servers.first_control_plane_public_ip} 'cat /etc/rancher/k3s/k3s.yaml' > kubeconfig && sed -i '' 's/127.0.0.1/${module.servers.first_control_plane_public_ip}/g' kubeconfig"
+    get_kubeconfig = "ssh root@${module.servers.first_control_plane_public_ip} 'cat /etc/rancher/k3s/k3s.yaml' > kubeconfig && sed -i '' 's/127.0.0.1/${module.api_load_balancer.ipv4_address}/g' kubeconfig"
   }
   description = "Manual bootstrap commands"
   sensitive   = true

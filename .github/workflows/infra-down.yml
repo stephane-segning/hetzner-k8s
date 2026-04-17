@@ -1,0 +1,57 @@
+name: Infra Down
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hetzner-prod-infra
+  cancel-in-progress: false
+
+jobs:
+  poweroff:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      TF_IN_AUTOMATION: true
+      TF_INPUT: false
+      TF_DIR: terraform/envs/prod
+      HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.TF_STATE_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_STATE_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: eu-central
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+
+      - name: Write backend config
+        run: |
+          cat > backend.hcl <<EOF
+          bucket = "${{ secrets.TF_STATE_BUCKET }}"
+          key    = "${{ secrets.TF_STATE_KEY }}"
+          region = "eu-central"
+          endpoints = {
+            s3 = "${{ secrets.TF_STATE_ENDPOINT }}"
+          }
+          skip_requesting_account_id = true
+          skip_credentials_validation = true
+          skip_metadata_api_check = true
+          skip_region_validation = true
+          use_path_style = true
+          skip_s3_checksum = true
+          EOF
+
+      - name: Terraform init
+        run: terraform -chdir="$TF_DIR" init -reconfigure -backend-config="$GITHUB_WORKSPACE/backend.hcl"
+
+      - name: Power off all servers
+        run: ./scripts/github/hcloud-server-power.sh poweroff
+
+      - name: Show down-mode summary
+        run: |
+          echo "Servers powered off. Terraform-managed resources, the API load balancer, and CCM-managed ingress load balancers remain allocated." >> "$GITHUB_STEP_SUMMARY"

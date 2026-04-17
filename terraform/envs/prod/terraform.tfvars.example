@@ -14,8 +14,11 @@ ssh_key_ids = ["your-ssh-key-name"]
 
 allowed_ssh_ips = ["YOUR_IP/32"]
 
-# Restrict this to the static egress IP or CIDR used by the home Argo CD cluster.
-allowed_api_ips = ["HOME_CLUSTER_EGRESS_IP/32"]
+# Keep this empty when using the dedicated API load balancer.
+# Set it only if you intentionally want direct API access to node public IPs.
+allowed_api_ips = []
+
+api_load_balancer_type = "lb11"
 
 create_data_volumes = false
 data_volume_size_gb = 50

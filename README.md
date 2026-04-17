@@ -8,6 +8,7 @@ This repository provisions a **Hetzner-hosted k3s cluster** on Hetzner Cloud wit
 
 - **Control plane**: 3 `CPX22` control-plane nodes by default
 - **Workers**: 2 `CPX42` worker nodes by default
+- **Cluster API**: Terraform-managed Hetzner TCP load balancer on `:6443`
 - **Ingress**: Traefik exposed through a Kubernetes-managed Hetzner Load Balancer
 - **Storage**: Hetzner CSI driver for persistent volumes
 - **Networking**: Private network with firewall protection
@@ -20,6 +21,7 @@ This repository provisions a **Hetzner-hosted k3s cluster** on Hetzner Cloud wit
 - Hetzner private network and subnet
 - Firewall rules (SSH, Kubernetes API, internal traffic)
 - Deterministic `CPX22` control-plane and `CPX42` worker nodes running Ubuntu 24.04 LTS
+- 1 Terraform-managed API load balancer for Kubernetes access
 - Optional data volumes
 
 ### Bootstrap (cloud-init/scripts)
@@ -52,6 +54,7 @@ This repository provisions a **Hetzner-hosted k3s cluster** on Hetzner Cloud wit
 | Component | Owned By | Managed By |
 |-----------|----------|------------|
 | Hetzner infra (servers, network, firewall) | Terraform | Terraform |
+| Kubernetes API load balancer (`:6443`) | Terraform | Terraform |
 | OS bootstrap (k3s install) | Terraform | Terraform |
 | In-cluster platform (CCM, CSI, Traefik) | Argo CD | Argo CD |
 | Hetzner ingress load balancer | Kubernetes + Hetzner CCM | Kubernetes + Hetzner CCM |
@@ -68,36 +71,32 @@ This repository provisions a **Hetzner-hosted k3s cluster** on Hetzner Cloud wit
 - kubectl
 - helm
 
-### 1. Configure Variables
+### 1. Configure GitHub Actions
+
+Prefer the GitHub Actions workflows in `.github/workflows/`.
+
+Set the required secrets and variables described in [docs/github-actions.md](./docs/github-actions.md).
+
+### 2. Trigger Infrastructure Workflow
+
+Use GitHub Actions:
+
+- `Infra Up`
+- `Infra Down`
+- `Infra Destroy`
+
+### 3. Optional Local Validation
 
 ```bash
 cp terraform/envs/prod/terraform.tfvars.example terraform/envs/prod/terraform.tfvars
-# Edit terraform.tfvars with your values
+# Edit terraform.tfvars only if you need local validation
 ```
 
-### 2. Initialize and Plan
+### 4. Optional Local Validation Commands
 
 ```bash
 make init
-make plan
-```
-
-### 3. Apply Infrastructure
-
-```bash
-make apply
-```
-
-### 4. Bootstrap Cluster
-
-```bash
-make bootstrap
-```
-
-### 5. Verify
-
-```bash
-make verify
+make test
 ```
 
 ## Directory Structure
@@ -168,10 +167,18 @@ If only k3s needs reinstall:
 ## Security Baseline
 
 - Private networking only (no public DB/Redis)
+- Direct node public access to `6443` is disabled by default
 - Default-deny NetworkPolicies
 - Firewall restricts to necessary ports
 - No sensitive data in Git (use tfvars for secrets)
 - RBAC enabled by default
+
+## API Access
+
+- Argo CD and human operators should use the Terraform-managed API endpoint from `api_server_endpoint`.
+- The control-plane nodes only accept API traffic from the private network by default.
+- The dedicated API load balancer provides a stable endpoint, but Hetzner load balancers do not currently give us the same server-side source IP allowlisting semantics as direct node firewalls when forwarding over the private network.
+- Treat Kubernetes authentication and authorization as the primary security boundary for the public API endpoint unless you add an outer private-access layer.
 
 ## Next Steps
 
@@ -184,4 +191,5 @@ If only k3s needs reinstall:
 - [DECISIONS.md](./DECISIONS.md) - Design decisions and rationale
 - [TESTING.md](./TESTING.md) - Test strategy and coverage
 - [docs/bootstrap.md](./docs/bootstrap.md) - Detailed bootstrap guide
+- [docs/github-actions.md](./docs/github-actions.md) - GitHub Actions and remote state setup
 - [docs/recovery.md](./docs/recovery.md) - Recovery procedures

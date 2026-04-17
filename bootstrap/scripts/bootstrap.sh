@@ -138,9 +138,12 @@ verify_cluster() {
 
 get_kubeconfig() {
     log "Retrieving kubeconfig..."
+
+    local api_server_ip
+    api_server_ip=$(terraform output -raw api_load_balancer_ip)
     
     ssh "root@$FIRST_CONTROL_PLANE_IP" "cat /etc/rancher/k3s/k3s.yaml" | \
-        sed "s/127.0.0.1/$FIRST_CONTROL_PLANE_IP/g" > "$PROJECT_ROOT/kubeconfig"
+        sed "s/127.0.0.1/$api_server_ip/g" > "$PROJECT_ROOT/kubeconfig"
     
     chmod 600 "$PROJECT_ROOT/kubeconfig"
     
