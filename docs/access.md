@@ -47,7 +47,7 @@ Required data for Argo CD cluster registration:
 
 Suggested process:
 
-1. apply `platform/base/cluster-access.yaml`
+1. run `make platform-install` or apply `platform/base/cluster-access.yaml`
 2. read the token from the generated secret
 3. register the remote cluster in the home Argo CD instance using the endpoint, CA, and token
 

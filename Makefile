@@ -6,7 +6,7 @@ TF_VARS ?= $(TF_DIR)/terraform.tfvars
 KUBECONFIG ?= kubeconfig
 BACKEND_CONFIG ?=
 
-.PHONY: help init plan apply destroy bootstrap verify test lint render fmt clean
+.PHONY: help init plan apply destroy bootstrap platform-install verify test lint render fmt clean
 
 help:
 	@echo "Hetzner Kubernetes Platform"
@@ -22,6 +22,7 @@ help:
 	@echo ""
 	@echo "Bootstrap:"
 	@echo "  bootstrap   Bootstrap k3s cluster"
+	@echo "  platform-install Install Cilium and base platform"
 	@echo "  get-kubeconfig Retrieve kubeconfig from first node"
 	@echo ""
 	@echo "Verification:"
@@ -61,6 +62,10 @@ output:
 bootstrap:
 	@echo "==> Bootstrapping k3s cluster"
 	./bootstrap/scripts/bootstrap.sh
+
+platform-install:
+	@echo "==> Installing platform components"
+	./bootstrap/scripts/install-platform.sh
 
 get-kubeconfig:
 	@echo "==> Retrieving kubeconfig"
@@ -128,5 +133,7 @@ show-costs:
 	@echo "==> Estimated monthly costs"
 	@echo "3x CPX22 control planes: ~€22-23"
 	@echo "2x CPX42 workers: ~€32-33"
-	@echo "1x Kubernetes-managed Hetzner LB: €5.83"
-	@echo "Estimated total: ~€60-70/month"
+	@echo "1x Terraform-managed API LB: €7.49"
+	@echo "1x Kubernetes-managed Traefik LB: €7.49"
+	@echo "1x Object Storage backend: €6.49"
+	@echo "Estimated total: ~€96-102/month"

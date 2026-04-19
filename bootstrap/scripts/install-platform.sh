@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+TF_DIR="$PROJECT_ROOT/terraform/envs/prod"
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+}
+
+error() {
+    echo "ERROR: $1" >&2
+    exit 1
+}
+
+ensure_prerequisites() {
+    command -v kubectl >/dev/null 2>&1 || error "kubectl is required"
+    command -v helm >/dev/null 2>&1 || error "helm is required"
+
+    if [ -z "${KUBECONFIG:-}" ]; then
+        if [ -f "$PROJECT_ROOT/kubeconfig" ]; then
+            export KUBECONFIG="$PROJECT_ROOT/kubeconfig"
+        else
+            error "KUBECONFIG is not set and $PROJECT_ROOT/kubeconfig does not exist"
+        fi
+    fi
+
+    kubectl version --request-timeout=10s >/dev/null 2>&1 || error "kubectl cannot reach the cluster"
+}
+
+terraform_outputs_available() {
+    command -v terraform >/dev/null 2>&1 && terraform -chdir="$TF_DIR" output -raw network_id >/dev/null 2>&1
+}
+
+resolve_hetzner_inputs() {
+    if terraform_outputs_available; then
+        log "Using Hetzner secret manifests from Terraform outputs"
+        HCLOUD_CCM_SECRET_MANIFEST=$(terraform -chdir="$TF_DIR" output -raw hcloud_ccm_secret_manifest)
+        HCLOUD_CSI_SECRET_MANIFEST=$(terraform -chdir="$TF_DIR" output -raw hcloud_csi_secret_manifest)
+        return
+    fi
+
+    : "${HCLOUD_TOKEN:?HCLOUD_TOKEN is required when Terraform outputs are unavailable}"
+    : "${HCLOUD_NETWORK:?HCLOUD_NETWORK is required when Terraform outputs are unavailable}"
+
+    log "Using Hetzner secret manifests from environment variables"
+    HCLOUD_CCM_SECRET_MANIFEST=$(cat <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: hcloud
+  namespace: kube-system
+stringData:
+  token: "${HCLOUD_TOKEN}"
+  network: "${HCLOUD_NETWORK}"
+EOF
+)
+    HCLOUD_CSI_SECRET_MANIFEST=$(cat <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: hcloud-csi
+  namespace: kube-system
+stringData:
+  token: "${HCLOUD_TOKEN}"
+EOF
+)
+}
+
+apply_namespaces() {
+    log "Applying base namespaces"
+    kubectl apply -f "$PROJECT_ROOT/platform/base/namespaces.yaml"
+}
+
+install_cilium() {
+    log "Installing Cilium"
+    helm repo add cilium https://helm.cilium.io >/dev/null 2>&1 || true
+    helm repo update >/dev/null 2>&1
+    helm upgrade --install cilium cilium/cilium \
+        --namespace kube-system \
+        --values "$PROJECT_ROOT/platform/helm-values/cilium-values.yaml"
+
+    kubectl rollout status daemonset/cilium -n kube-system --timeout=10m
+    kubectl rollout status deployment/cilium-operator -n kube-system --timeout=10m
+}
+
+apply_hetzner_secrets() {
+    log "Applying Hetzner secret manifests"
+    printf '%s
+    printf '%s
+}
+
+install_ccm_and_csi() {
+    log "Installing Hetzner CCM and CSI"
+    kubectl apply -f "$PROJECT_ROOT/platform/base/hcloud-ccm.yaml"
+    kubectl apply -f "$PROJECT_ROOT/platform/base/hcloud-csi.yaml"
+
+    kubectl rollout status deployment/hcloud-cloud-controller-manager -n kube-system --timeout=10m
+    kubectl rollout status deployment/hcloud-csi-controller -n kube-system --timeout=10m
+    kubectl rollout status daemonset/hcloud-csi-node -n kube-system --timeout=10m
+}
+
+install_traefik() {
+    log "Installing Traefik"
+    helm repo add traefik https://traefik.github.io/charts >/dev/null 2>&1 || true
+    helm repo update >/dev/null 2>&1
+    helm upgrade --install traefik traefik/traefik \
+        --namespace traefik \
+        --create-namespace \
+        --values "$PROJECT_ROOT/platform/helm-values/traefik-values.yaml"
+
+    kubectl rollout status deployment/traefik -n traefik --timeout=10m
+}
+
+apply_cluster_basics() {
+    log "Applying cluster access and NetworkPolicies"
+    kubectl apply -f "$PROJECT_ROOT/platform/base/cluster-access.yaml"
+    kubectl apply -f "$PROJECT_ROOT/platform/base/networkpolicy-default-deny.yaml"
+    kubectl apply -f "$PROJECT_ROOT/platform/base/networkpolicy-dns.yaml"
+    kubectl apply -f "$PROJECT_ROOT/platform/base/networkpolicy-data.yaml"
+    kubectl apply -f "$PROJECT_ROOT/platform/base/networkpolicy-ingress.yaml"
+}
+
+show_summary() {
+    log "Platform installation complete"
+    kubectl get nodes -o wide
+    echo
+    kubectl get pods -A
+    echo
+    log "Next checks:"
+    log "  kubectl get svc -n traefik"
+    log "  kubectl get storageclass"
+    log "  kubectl -n platform get secret argocd-manager-token"
+}
+
+main() {
+    ensure_prerequisites
+    resolve_hetzner_inputs
+    apply_namespaces
+    install_cilium
+    apply_hetzner_secrets
+    install_ccm_and_csi
+    install_traefik
+    apply_cluster_basics
+    show_summary
+}
+
+main "$@"

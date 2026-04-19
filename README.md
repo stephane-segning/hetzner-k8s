@@ -149,6 +149,7 @@ make test
 | `make apply` | Apply Terraform locally (break-glass only) |
 | `make destroy` | Destroy Terraform locally (break-glass only) |
 | `make bootstrap` | Bootstrap k3s cluster |
+| `make platform-install` | Install Cilium and the base platform layer (`HCLOUD_TOKEN` + `HCLOUD_NETWORK` if no local Terraform state) |
 | `make verify` | Verify cluster is healthy |
 | `make test` | Run all tests |
 | `make lint` | Lint all code |
@@ -160,7 +161,7 @@ make test
 
 1. Trigger `Infra Destroy` in GitHub Actions
 2. Trigger `Infra Up` in GitHub Actions
-3. Wait for bootstrap readiness and retrieve kubeconfig
+3. Wait for bootstrap readiness, retrieve kubeconfig, and rerun `make platform-install`
 
 ### Partial Recovery
 
@@ -177,10 +178,11 @@ make bootstrap
 |----------|--------------|
 | 3x CPX22 control planes | ~€22-23 |
 | 2x CPX42 workers | ~€32-33 |
-| 1x Terraform-managed API LB | ~€5.83 |
-| 1x Hetzner LB via Traefik service | ~€5.83 |
+| 1x Terraform-managed API LB | ~€7.49 |
+| 1x Hetzner LB via Traefik service | ~€7.49 |
+| 1x Object Storage backend | ~€6.49 |
 | Traffic (est.) | ~€5-10 |
-| **Total** | **~€65-75/month** |
+| **Total** | **~€96-102/month** |
 
 ## Security Baseline
 
@@ -216,6 +218,7 @@ make bootstrap
 - `Infra Up`: validates, applies Terraform, and powers on servers
 - `Infra Down`: powers off Terraform-managed servers without destroying infra
 - `Infra Destroy`: removes the known CCM-managed ingress LB and destroys Terraform-managed infrastructure
+- `Platform Up`: installs Cilium and the base in-cluster platform layer using a bootstrap kubeconfig secret
 
 ## Next Steps
 

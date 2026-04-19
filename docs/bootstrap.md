@@ -92,17 +92,32 @@ hetzner-k8s-worker-1 NotReady <none>            30s   v1.xx.x+k3s.x
 ==> Bootstrap complete!
 ```
 
-## Step 6: Install Cilium
+## Step 6: Install Base Platform
 
-Install Cilium before expecting node readiness:
+Install the post-bootstrap platform layer:
 
 ```bash
-helm repo add cilium https://helm.cilium.io
-helm repo update
-helm install cilium cilium/cilium \
-  --namespace kube-system \
-  --values platform/helm-values/cilium-values.yaml
+make platform-install
 ```
+
+If you are not using local Terraform state, provide the Hetzner inputs explicitly:
+
+```bash
+export HCLOUD_TOKEN="<hetzner-cloud-api-token>"
+export HCLOUD_NETWORK="<terraform network_id output>"
+make platform-install
+```
+
+`make platform-install` uses Terraform outputs when they are available locally. Otherwise it uses `HCLOUD_TOKEN` and `HCLOUD_NETWORK` from the environment.
+
+This installs:
+
+- Cilium
+- Hetzner CCM
+- Hetzner CSI
+- Traefik
+- cluster access scaffolding
+- baseline NetworkPolicies
 
 ## Step 7: Verify Cluster
 
@@ -124,37 +139,7 @@ Argo CD should store:
 - cluster CA data
 - bearer token from `platform/argocd-manager-token`
 
-## Step 8: Apply Platform Components
-
-Install the Hetzner CCM and CSI:
-
-```bash
-# Render secret manifests from Terraform outputs
-terraform -chdir=terraform/envs/prod output -raw hcloud_ccm_secret_manifest | kubectl apply -f -
-terraform -chdir=terraform/envs/prod output -raw hcloud_csi_secret_manifest | kubectl apply -f -
-
-# Apply platform manifests
-kubectl apply -f platform/base/namespaces.yaml
-kubectl apply -f platform/base/networkpolicy-default-deny.yaml
-kubectl apply -f platform/base/networkpolicy-dns.yaml
-kubectl apply -f platform/base/networkpolicy-data.yaml
-kubectl apply -f platform/base/networkpolicy-ingress.yaml
-kubectl apply -f platform/base/hcloud-ccm.yaml
-kubectl apply -f platform/base/hcloud-csi.yaml
-```
-
-## Step 9: Install Traefik with Helm
-
-```bash
-helm repo add traefik https://traefik.github.io/charts
-helm repo update
-helm install traefik traefik/traefik \
-  --namespace traefik \
-  --create-namespace \
-  --values platform/helm-values/traefik-values.yaml
-```
-
-## Step 10: Verify Platform
+## Step 8: Verify Platform
 
 ```bash
 # Check all pods are running
@@ -220,8 +205,8 @@ curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC=agent sh -s - \
 ### SSH Connection Refused
 
 - Wait longer for cloud-init to complete (~5 min)
-- Check firewall allows your IP
-- Verify SSH key is added to Hetzner
+- Use your private or break-glass node access path
+- Verify the SSH key exists in Hetzner Cloud if you rely on direct node access
 
 ### k3s Server Not Ready
 

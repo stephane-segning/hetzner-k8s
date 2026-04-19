@@ -1,0 +1,107 @@
+name: Platform Up
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hetzner-prod-platform
+  cancel-in-progress: false
+
+jobs:
+  install-platform:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      TF_IN_AUTOMATION: true
+      TF_INPUT: false
+      TF_DIR: terraform/envs/prod
+      HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+      TF_VAR_hcloud_token: ${{ secrets.HCLOUD_TOKEN }}
+      TF_VAR_cluster_name: ${{ vars.TF_CLUSTER_NAME || 'hetzner-k8s' }}
+      TF_VAR_control_plane_server_type: ${{ vars.TF_CONTROL_PLANE_SERVER_TYPE || 'cpx22' }}
+      TF_VAR_worker_server_type: ${{ vars.TF_WORKER_SERVER_TYPE || 'cpx42' }}
+      TF_VAR_control_plane_count: ${{ vars.TF_CONTROL_PLANE_COUNT || '3' }}
+      TF_VAR_worker_count: ${{ vars.TF_WORKER_COUNT || '2' }}
+      TF_VAR_location: ${{ vars.TF_LOCATION || 'fsn1' }}
+      TF_VAR_ssh_key_ids: ${{ vars.TF_SSH_KEY_IDS || '[]' }}
+      TF_VAR_api_load_balancer_type: ${{ vars.TF_API_LOAD_BALANCER_TYPE || 'lb11' }}
+      TF_VAR_api_server_hostname: ${{ vars.TF_API_SERVER_HOSTNAME || '' }}
+      TF_VAR_oidc_issuer_url: ${{ vars.TF_OIDC_ISSUER_URL || '' }}
+      TF_VAR_oidc_client_id: ${{ vars.TF_OIDC_CLIENT_ID || 'kubernetes' }}
+      TF_VAR_oidc_username_claim: ${{ vars.TF_OIDC_USERNAME_CLAIM || 'preferred_username' }}
+      TF_VAR_oidc_groups_claim: ${{ vars.TF_OIDC_GROUPS_CLAIM || 'groups' }}
+      TF_VAR_oidc_username_prefix: ${{ vars.TF_OIDC_USERNAME_PREFIX || '-' }}
+      TF_VAR_oidc_groups_prefix: ${{ vars.TF_OIDC_GROUPS_PREFIX || '' }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.TF_STATE_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_STATE_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: eu-central
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+
+      - name: Write backend config
+        run: |
+          BACKEND_ENDPOINT='${{ secrets.TF_STATE_ENDPOINT }}'
+
+          if [ -z "$BACKEND_ENDPOINT" ]; then
+            echo "TF_STATE_ENDPOINT is empty" >&2
+            exit 1
+          fi
+
+          case "$BACKEND_ENDPOINT" in
+            http://*|https://*) ;;
+            *) BACKEND_ENDPOINT="https://$BACKEND_ENDPOINT" ;;
+          esac
+
+          cat > backend.hcl <<EOF
+          bucket = "${{ secrets.TF_STATE_BUCKET }}"
+          key    = "${{ secrets.TF_STATE_KEY }}"
+          region = "eu-central"
+          endpoints = {
+            s3 = "$BACKEND_ENDPOINT"
+          }
+          skip_requesting_account_id = true
+          skip_credentials_validation = true
+          skip_metadata_api_check = true
+          skip_region_validation = true
+          use_path_style = true
+          skip_s3_checksum = true
+          EOF
+
+      - name: Terraform init
+        run: terraform -chdir="$TF_DIR" init -reconfigure -backend-config="$GITHUB_WORKSPACE/backend.hcl"
+
+      - name: Write bootstrap kubeconfig
+        env:
+          REMOTE_CLUSTER_KUBECONFIG_B64: ${{ secrets.REMOTE_CLUSTER_KUBECONFIG_B64 }}
+        run: |
+          if [ -z "$REMOTE_CLUSTER_KUBECONFIG_B64" ]; then
+            echo "REMOTE_CLUSTER_KUBECONFIG_B64 is required" >&2
+            exit 1
+          fi
+
+          printf '%s' "$REMOTE_CLUSTER_KUBECONFIG_B64" | base64 --decode > "$RUNNER_TEMP/kubeconfig"
+          chmod 600 "$RUNNER_TEMP/kubeconfig"
+          echo "KUBECONFIG=$RUNNER_TEMP/kubeconfig" >> "$GITHUB_ENV"
+
+      - name: Resolve Hetzner network ID
+        run: |
+          echo "HCLOUD_NETWORK=$(terraform -chdir="$TF_DIR" output -raw network_id)" >> "$GITHUB_ENV"
+
+      - name: Install platform layer
+        run: ./bootstrap/scripts/install-platform.sh
+
+      - name: Show platform summary
+        run: |
+          echo "API endpoint: $(terraform -chdir="$TF_DIR" output -raw api_server_endpoint)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Cilium status:" >> "$GITHUB_STEP_SUMMARY"
+          kubectl get pods -n kube-system -l k8s-app=cilium -o wide >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Nodes:" >> "$GITHUB_STEP_SUMMARY"
+          kubectl get nodes -o wide >> "$GITHUB_STEP_SUMMARY"

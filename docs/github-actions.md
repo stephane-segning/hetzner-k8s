@@ -18,6 +18,7 @@ Set these repository or environment secrets:
 - `TF_STATE_ENDPOINT`: Object Storage endpoint, for example `nbg1.your-objectstorage.com` or `https://nbg1.your-objectstorage.com`
 - `TF_STATE_ACCESS_KEY_ID`: Object Storage access key
 - `TF_STATE_SECRET_ACCESS_KEY`: Object Storage secret key
+- `REMOTE_CLUSTER_KUBECONFIG_B64`: base64-encoded bootstrap kubeconfig used only for the initial platform-install workflow
 
 Important:
 
@@ -25,6 +26,26 @@ Important:
 - `HCLOUD_TOKEN` is used for the Hetzner Cloud API.
 - `TF_STATE_ENDPOINT` must point to the Object Storage endpoint for your bucket region, for example `nbg1.your-objectstorage.com`.
 - The workflows will add `https://` automatically if you omit it.
+
+### Creating `REMOTE_CLUSTER_KUBECONFIG_B64`
+
+This secret is only needed for the initial `Platform Up` workflow.
+
+From a machine that already has the bootstrap kubeconfig file:
+
+macOS:
+
+```bash
+base64 < kubeconfig | tr -d '\n'
+```
+
+Linux:
+
+```bash
+base64 -w0 kubeconfig
+```
+
+Copy the resulting single-line value into the GitHub secret `REMOTE_CLUSTER_KUBECONFIG_B64`.
 
 ## Recommended GitHub Variables
 
@@ -71,6 +92,12 @@ What it does not do:
 - does not register the cluster in Argo CD
 - does not make nodes `Ready` by itself, because Cilium is installed afterward
 
+After bootstrap, the supported local completion step is:
+
+```bash
+make platform-install
+```
+
 Use this for:
 
 - first-time provisioning
@@ -97,6 +124,33 @@ Use this for:
 
 - temporary shutdown while preserving state and resources
 
+### Platform Up
+
+File: `.github/workflows/platform-up.yml`
+
+What it does:
+
+1. Loads remote Terraform state
+2. Decodes the bootstrap kubeconfig secret
+3. Resolves the Hetzner network ID from Terraform outputs
+4. Runs `./bootstrap/scripts/install-platform.sh`
+5. Publishes node and Cilium status in the workflow summary
+
+What it installs:
+
+- Cilium
+- Hetzner CCM
+- Hetzner CSI
+- Traefik
+- cluster access scaffolding
+- baseline NetworkPolicies
+
+Use this for:
+
+- first platform bring-up after bootstrap
+- re-running the base platform layer after cluster rebuilds
+- reconciling the foundational platform before Argo CD fully takes over
+
 ### Infra Destroy
 
 File: `.github/workflows/infra-destroy.yml`
@@ -119,3 +173,4 @@ Use this for:
 - Node public IPs remain allocated for outbound connectivity, but inbound public access to the VMs is blocked by firewall policy.
 - If you add more CCM-managed services of type `LoadBalancer`, extend the destroy workflow so their Hetzner load balancers are deleted before Terraform destroy.
 - The workflows provision the cluster foundation. Full platform readiness still requires bootstrap validation and in-cluster platform sync.
+- `REMOTE_CLUSTER_KUBECONFIG_B64` is a bootstrap-only credential for the `Platform Up` workflow. After OIDC and Argo CD ServiceAccount access are established, treat it as transitional and rotate or remove it if you no longer need it.

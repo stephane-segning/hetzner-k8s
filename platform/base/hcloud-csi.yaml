@@ -9,14 +9,6 @@ spec:
     - Persistent
     - Ephemeral
 ---
-apiVersion: v1
-kind: Secret
-metadata:
-  name: hcloud-csi
-  namespace: kube-system
-stringData:
-  token: "${HCLOUD_TOKEN}"
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:

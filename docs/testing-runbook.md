@@ -76,7 +76,27 @@ Expected:
 - nodes register with the API
 - nodes may still be `NotReady` until Cilium is installed
 
-### 5. Install Cilium
+### 4a. Publish bootstrap kubeconfig for Platform Up
+
+If you want to use GitHub Actions for the post-bootstrap platform layer, base64-encode the bootstrap kubeconfig and store it in the GitHub secret:
+
+- `REMOTE_CLUSTER_KUBECONFIG_B64`
+
+### 5. Install Base Platform
+
+Run:
+
+```bash
+# either locally
+make platform-install
+
+# or via GitHub Actions
+Platform Up
+```
+
+This step installs Cilium first and then continues with the rest of the base platform.
+
+### 6. Validate Cilium
 
 Expected outcome:
 
@@ -90,7 +110,7 @@ kubectl get nodes -o wide
 kubectl get pods -n kube-system -l k8s-app=cilium
 ```
 
-### 6. Install CCM and CSI
+### 7. Validate CCM and CSI
 
 Expected outcome:
 
@@ -104,7 +124,7 @@ kubectl get pods -n kube-system
 kubectl get storageclass
 ```
 
-### 7. Install Traefik
+### 8. Validate Traefik
 
 Expected outcome:
 
@@ -118,7 +138,7 @@ kubectl get svc -n traefik
 kubectl get pods -n traefik
 ```
 
-### 8. Validate storage
+### 9. Validate storage
 
 Expected outcome:
 
@@ -129,11 +149,10 @@ Suggested test:
 
 - create a small PVC and pod using `hcloud-volumes`
 
-### 9. Validate access model
+### 10. Validate access model
 
 Automation:
 
-- apply `platform/base/cluster-access.yaml`
 - verify `argocd-manager-token` exists
 - capture token and CA for Argo CD registration
 
@@ -142,7 +161,7 @@ Humans:
 - if OIDC is enabled, verify Keycloak login produces a token accepted by the API
 - verify OIDC group RBAC maps correctly
 
-### 10. Validate ingress path
+### 11. Validate ingress path
 
 Deploy a simple app behind Traefik and verify:
 
