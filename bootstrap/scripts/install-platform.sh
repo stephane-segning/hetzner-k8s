@@ -118,7 +118,7 @@ install_ccm_and_csi() {
         --namespace kube-system \
         --values "$PROJECT_ROOT/platform/helm-values/hcloud-csi-values.yaml"
 
-    kubectl rollout status deployment/hccm-hcloud-cloud-controller-manager -n kube-system --timeout=10m
+    kubectl rollout status deployment/hcloud-cloud-controller-manager -n kube-system --timeout=10m
     kubectl rollout status deployment/hcloud-csi-controller -n kube-system --timeout=10m
     kubectl rollout status daemonset/hcloud-csi-node -n kube-system --timeout=10m
 }
