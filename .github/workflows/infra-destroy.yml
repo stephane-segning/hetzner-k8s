@@ -47,12 +47,24 @@ jobs:
 
       - name: Write backend config
         run: |
+          BACKEND_ENDPOINT='${{ secrets.TF_STATE_ENDPOINT }}'
+
+          if [ -z "$BACKEND_ENDPOINT" ]; then
+            echo "TF_STATE_ENDPOINT is empty" >&2
+            exit 1
+          fi
+
+          case "$BACKEND_ENDPOINT" in
+            http://*|https://*) ;;
+            *) BACKEND_ENDPOINT="https://$BACKEND_ENDPOINT" ;;
+          esac
+
           cat > backend.hcl <<EOF
           bucket = "${{ secrets.TF_STATE_BUCKET }}"
           key    = "${{ secrets.TF_STATE_KEY }}"
           region = "eu-central"
           endpoints = {
-            s3 = "${{ secrets.TF_STATE_ENDPOINT }}"
+            s3 = "$BACKEND_ENDPOINT"
           }
           skip_requesting_account_id = true
           skip_credentials_validation = true

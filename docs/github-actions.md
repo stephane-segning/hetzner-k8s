@@ -13,11 +13,18 @@ The workflows generate backend configuration at runtime and run `terraform init 
 Set these repository or environment secrets:
 
 - `HCLOUD_TOKEN`: Hetzner Cloud API token
-- `TF_STATE_BUCKET`: Object Storage bucket name for Terraform state
-- `TF_STATE_KEY`: Object key for the production state file
-- `TF_STATE_ENDPOINT`: Object Storage endpoint, for example `https://nbg1.your-objectstorage.com`
+- `TF_STATE_BUCKET`: Object Storage bucket name for Terraform state, for example `terraform-state`
+- `TF_STATE_KEY`: Object key for the production state file, for example `hetzner-k8s/prod.tfstate`
+- `TF_STATE_ENDPOINT`: Object Storage endpoint, for example `nbg1.your-objectstorage.com` or `https://nbg1.your-objectstorage.com`
 - `TF_STATE_ACCESS_KEY_ID`: Object Storage access key
 - `TF_STATE_SECRET_ACCESS_KEY`: Object Storage secret key
+
+Important:
+
+- `TF_STATE_ACCESS_KEY_ID` and `TF_STATE_SECRET_ACCESS_KEY` are Object Storage credentials, not your Hetzner Cloud API token.
+- `HCLOUD_TOKEN` is used for the Hetzner Cloud API.
+- `TF_STATE_ENDPOINT` must point to the Object Storage endpoint for your bucket region, for example `nbg1.your-objectstorage.com`.
+- The workflows will add `https://` automatically if you omit it.
 
 ## Recommended GitHub Variables
 
