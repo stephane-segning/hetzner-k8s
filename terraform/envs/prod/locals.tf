@@ -6,9 +6,17 @@ locals {
 
   k3s_token = var.k3s_token != "" ? var.k3s_token : random_password.k3s_token.result
 
+  normalized_api_server_hostname = trimsuffix(
+    trimprefix(
+      trimprefix(var.api_server_hostname, "https://"),
+      "http://"
+    ),
+    "/"
+  )
+
   computed_server_args = compact(concat(
-    var.api_server_hostname != "" ? [
-      "--tls-san=${var.api_server_hostname}"
+    local.normalized_api_server_hostname != "" ? [
+      "--tls-san=${local.normalized_api_server_hostname}"
     ] : [],
     var.oidc_issuer_url != "" ? [
       "--kube-apiserver-arg=oidc-issuer-url=${var.oidc_issuer_url}",

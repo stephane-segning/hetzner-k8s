@@ -62,12 +62,12 @@ output "api_load_balancer_ipv6" {
 }
 
 output "api_server_endpoint" {
-  value       = var.api_server_hostname != "" ? "https://${var.api_server_hostname}:6443" : "https://${module.api_load_balancer.ipv4_address}:6443"
+  value       = local.normalized_api_server_hostname != "" ? "https://${local.normalized_api_server_hostname}:6443" : "https://${module.api_load_balancer.ipv4_address}:6443"
   description = "Stable Kubernetes API endpoint for Argo CD and human operators"
 }
 
 output "api_server_hostname" {
-  value       = var.api_server_hostname
+  value       = local.normalized_api_server_hostname
   description = "Configured DNS hostname for the Kubernetes API endpoint"
 }
 
@@ -84,7 +84,7 @@ output "kubeconfig_path" {
 output "bootstrap_commands" {
   value = {
     wait_cluster   = "make bootstrap"
-    get_kubeconfig = "ssh root@${module.servers.first_control_plane_public_ip} 'cat /etc/rancher/k3s/k3s.yaml' > kubeconfig && sed -i '' 's/127.0.0.1/${var.api_server_hostname != "" ? var.api_server_hostname : module.api_load_balancer.ipv4_address}/g' kubeconfig"
+    get_kubeconfig = "ssh root@${module.servers.first_control_plane_public_ip} 'cat /etc/rancher/k3s/k3s.yaml' > kubeconfig && sed -i '' 's/127.0.0.1/${local.normalized_api_server_hostname != "" ? local.normalized_api_server_hostname : module.api_load_balancer.ipv4_address}/g' kubeconfig"
   }
   description = "Manual bootstrap commands"
   sensitive   = true

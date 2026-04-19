@@ -53,7 +53,7 @@ variable "api_load_balancer_type" {
 }
 
 variable "api_server_hostname" {
-  description = "Optional DNS hostname for the Kubernetes API endpoint. Used as a TLS SAN when set."
+  description = "Optional DNS hostname for the Kubernetes API endpoint, without scheme. Used as a TLS SAN when set."
   type        = string
   default     = ""
 }

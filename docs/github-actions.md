@@ -40,7 +40,8 @@ Set these as repository or environment variables:
   "my-ssh-key"
 ]`
 - `TF_API_LOAD_BALANCER_TYPE`: defaults to `lb11`
-- `TF_API_SERVER_HOSTNAME`: DNS name for the Kubernetes API, for example `k8s.example.com`
+- `TF_API_SERVER_HOSTNAME`: DNS name for the Kubernetes API, for example `k8s.example.com`.
+  Do not include `https://`.
 - `TF_OIDC_ISSUER_URL`: Keycloak realm issuer URL
 - `TF_OIDC_CLIENT_ID`: defaults to `kubernetes`
 - `TF_OIDC_USERNAME_CLAIM`: defaults to `preferred_username`
