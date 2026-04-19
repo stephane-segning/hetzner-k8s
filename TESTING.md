@@ -2,6 +2,8 @@
 
 This document describes the test coverage and approach for this project.
 
+For the recommended first live validation order, follow `docs/testing-runbook.md`.
+
 ## What Is Tested
 
 ### Terraform
