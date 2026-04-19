@@ -87,8 +87,11 @@ install_cilium() {
 
 apply_hetzner_secrets() {
     log "Applying Hetzner secret manifests"
-    printf '%s
-    printf '%s
+    printf '%s\n' "$HCLOUD_CCM_SECRET_MANIFEST" | kubectl apply -f -
+    printf '%s\n' "$HCLOUD_CSI_SECRET_MANIFEST" | kubectl apply -f -
+
+    kubectl get secret hcloud -n kube-system >/dev/null
+    kubectl get secret hcloud-csi -n kube-system >/dev/null
 }
 
 install_ccm_and_csi() {
