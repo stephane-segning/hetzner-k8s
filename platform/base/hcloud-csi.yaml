@@ -4,11 +4,10 @@ metadata:
   name: csi.hetzner.cloud
 spec:
   attachRequired: true
-  fsGroupPolicy: File
   podInfoOnMount: true
-  seLinuxMount: true
   volumeLifecycleModes:
     - Persistent
+    - Ephemeral
 ---
 apiVersion: v1
 kind: ServiceAccount
