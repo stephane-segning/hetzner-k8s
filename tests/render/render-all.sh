@@ -28,6 +28,7 @@ if command -v helm >/dev/null 2>&1; then
     
     helm repo add traefik https://traefik.github.io/charts 2>/dev/null || true
     helm repo add cilium https://helm.cilium.io 2>/dev/null || true
+    helm repo add hcloud https://charts.hetzner.cloud 2>/dev/null || true
     helm repo add cnpg https://cloudnative-pg.github.io/charts 2>/dev/null || true
     helm repo add bitnami https://charts.bitnami.com/bitnami 2>/dev/null || true
     helm repo add grafana https://grafana.github.io/helm-charts 2>/dev/null || true
@@ -39,6 +40,14 @@ if command -v helm >/dev/null 2>&1; then
     helm template cilium cilium/cilium \
         --values "$PROJECT_ROOT/platform/helm-values/cilium-values.yaml" \
         --namespace kube-system > "$OUTPUT_DIR/helm/cilium.yaml" 2>/dev/null || echo "Warning: Failed to render cilium"
+
+    helm template hccm hcloud/hcloud-cloud-controller-manager \
+        --values "$PROJECT_ROOT/platform/helm-values/hcloud-ccm-values.yaml" \
+        --namespace kube-system > "$OUTPUT_DIR/helm/hcloud-ccm.yaml" 2>/dev/null || echo "Warning: Failed to render hcloud-ccm"
+
+    helm template hcloud-csi hcloud/hcloud-csi \
+        --values "$PROJECT_ROOT/platform/helm-values/hcloud-csi-values.yaml" \
+        --namespace kube-system > "$OUTPUT_DIR/helm/hcloud-csi.yaml" 2>/dev/null || echo "Warning: Failed to render hcloud-csi"
 
     helm template traefik traefik/traefik \
         --values "$PROJECT_ROOT/platform/helm-values/traefik-values.yaml" \

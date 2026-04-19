@@ -95,11 +95,30 @@ apply_hetzner_secrets() {
 }
 
 install_ccm_and_csi() {
-    log "Installing Hetzner CCM and CSI"
-    kubectl apply -f "$PROJECT_ROOT/platform/base/hcloud-ccm.yaml"
-    kubectl apply -f "$PROJECT_ROOT/platform/base/hcloud-csi.yaml"
+    log "Installing Hetzner CCM and CSI via official Helm charts"
 
-    kubectl rollout status deployment/hcloud-cloud-controller-manager -n kube-system --timeout=10m
+    helm repo add hcloud https://charts.hetzner.cloud >/dev/null 2>&1 || true
+    helm repo update >/dev/null 2>&1
+
+    if ! helm status hccm -n kube-system >/dev/null 2>&1; then
+        kubectl delete -f "$PROJECT_ROOT/platform/base/hcloud-ccm.yaml" --ignore-not-found=true >/dev/null 2>&1 || true
+    fi
+
+    if ! helm status hcloud-csi -n kube-system >/dev/null 2>&1; then
+        kubectl delete -f "$PROJECT_ROOT/platform/base/hcloud-csi.yaml" --ignore-not-found=true >/dev/null 2>&1 || true
+        kubectl delete csidriver csi.hetzner.cloud --ignore-not-found=true >/dev/null 2>&1 || true
+        kubectl delete storageclass hcloud-volumes --ignore-not-found=true >/dev/null 2>&1 || true
+    fi
+
+    helm upgrade --install hccm hcloud/hcloud-cloud-controller-manager \
+        --namespace kube-system \
+        --values "$PROJECT_ROOT/platform/helm-values/hcloud-ccm-values.yaml"
+
+    helm upgrade --install hcloud-csi hcloud/hcloud-csi \
+        --namespace kube-system \
+        --values "$PROJECT_ROOT/platform/helm-values/hcloud-csi-values.yaml"
+
+    kubectl rollout status deployment/hccm-hcloud-cloud-controller-manager -n kube-system --timeout=10m
     kubectl rollout status deployment/hcloud-csi-controller -n kube-system --timeout=10m
     kubectl rollout status daemonset/hcloud-csi-node -n kube-system --timeout=10m
 }

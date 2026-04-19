@@ -10,12 +10,6 @@ spec:
           - name: namespaces
             path: platform/base
             namespace: ""
-          - name: hcloud-ccm
-            path: platform/base
-            namespace: kube-system
-          - name: hcloud-csi
-            path: platform/base
-            namespace: kube-system
   template:
     metadata:
       name: '{{name}}'
@@ -55,41 +49,55 @@ spec:
             namespace: kube-system
             values: platform/helm-values/cilium-values.yaml
             syncWave: "0"
+          - name: hccm
+            chart: hcloud-cloud-controller-manager
+            repoURL: https://charts.hetzner.cloud
+            targetRevision: "*"
+            namespace: kube-system
+            values: platform/helm-values/hcloud-ccm-values.yaml
+            syncWave: "10"
+          - name: hcloud-csi
+            chart: hcloud-csi
+            repoURL: https://charts.hetzner.cloud
+            targetRevision: "*"
+            namespace: kube-system
+            values: platform/helm-values/hcloud-csi-values.yaml
+            syncWave: "10"
           - name: traefik
             chart: traefik
             repoURL: https://traefik.github.io/charts
             targetRevision: "*"
             namespace: traefik
             values: platform/helm-values/traefik-values.yaml
-            syncWave: "10"
+            syncWave: "20"
           - name: cnpg
             chart: cloudnative-pg
             repoURL: https://cloudnative-pg.github.io/charts
             targetRevision: "*"
             namespace: cnpg-system
             values: platform/helm-values/cnpg-values.yaml
-            syncWave: "20"
+            syncWave: "30"
           - name: redis
             chart: redis
             repoURL: https://charts.bitnami.com/bitnami
             targetRevision: "*"
             namespace: data
             values: platform/helm-values/redis-values.yaml
-            syncWave: "20"
+            syncWave: "30"
           - name: alloy
             chart: alloy
             repoURL: https://grafana.github.io/helm-charts
             targetRevision: "*"
             namespace: observability
             values: platform/helm-values/alloy-values.yaml
-            syncWave: "20"
+            syncWave: "30"
           - name: kube-state-metrics
             chart: kube-state-metrics
             repoURL: https://prometheus-community.github.io/helm-charts
             targetRevision: "*"
             namespace: observability
             values: platform/helm-values/kube-state-metrics-values.yaml
-            syncWave: "20"
+            syncWave: "30"
   template:
     metadata:
       name: '{{name}}'

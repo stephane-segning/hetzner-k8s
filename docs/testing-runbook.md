@@ -96,6 +96,8 @@ Platform Up
 
 This step installs Cilium first and then continues with the rest of the base platform.
 
+CCM and CSI are installed from Hetzner's official Helm charts.
+
 ### 6. Validate Cilium
 
 Expected outcome:

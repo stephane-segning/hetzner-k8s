@@ -113,8 +113,8 @@ make platform-install
 This installs:
 
 - Cilium
-- Hetzner CCM
-- Hetzner CSI
+- Hetzner CCM via the official Hetzner Helm chart
+- Hetzner CSI via the official Hetzner Helm chart
 - Traefik
 - cluster access scaffolding
 - baseline NetworkPolicies

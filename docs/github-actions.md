@@ -139,8 +139,8 @@ What it does:
 What it installs:
 
 - Cilium
-- Hetzner CCM
-- Hetzner CSI
+- Hetzner CCM via the official Hetzner chart
+- Hetzner CSI via the official Hetzner chart
 - Traefik
 - cluster access scaffolding
 - baseline NetworkPolicies

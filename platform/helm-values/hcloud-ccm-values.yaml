@@ -1,0 +1,27 @@
+networking:
+  enabled: true
+  clusterCIDR: 10.42.0.0/16
+
+env:
+  HCLOUD_TOKEN:
+    valueFrom:
+      secretKeyRef:
+        name: hcloud
+        key: token
+  ROBOT_USER:
+    valueFrom:
+      secretKeyRef:
+        name: hcloud
+        key: robot-user
+        optional: true
+  ROBOT_PASSWORD:
+    valueFrom:
+      secretKeyRef:
+        name: hcloud
+        key: robot-password
+        optional: true
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 50Mi
