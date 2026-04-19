@@ -64,6 +64,37 @@ CLUSTER_CA=$(kubectl config view --raw --minify -o jsonpath='{.clusters[0].clust
 
 Use these values in the home Argo CD cluster secret or registration flow.
 
+Example Argo CD cluster secret for the home cluster:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: hetzner-remote-cluster
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: cluster
+stringData:
+  name: hetzner-remote
+  server: https://k8s.example.com:6443
+  config: |
+    {
+      "bearerToken": "<ARGOCD_MANAGER_TOKEN>",
+      "tlsClientConfig": {
+        "insecure": false,
+        "caData": "<BASE64_CLUSTER_CA>"
+      }
+    }
+```
+
+Replace:
+
+- `https://k8s.example.com:6443` with `api_server_endpoint`
+- `<ARGOCD_MANAGER_TOKEN>` with the decoded `argocd-manager-token`
+- `<BASE64_CLUSTER_CA>` with the cluster CA bundle
+
+Apply that secret in the home Argo CD cluster namespace.
+
 ## Human access
 
 ### OIDC
@@ -120,6 +151,27 @@ kubectl config set-context hetzner-prod \
 ```
 
 Adjust the issuer URL, hostname, and CA path to your environment.
+
+## Quick test flow
+
+If the cluster is already provisioned and bootstrapped, a practical first test sequence is:
+
+1. Confirm the API hostname resolves to the API load balancer
+2. Confirm Cilium is healthy and nodes are `Ready`
+3. Apply `platform/base/cluster-access.yaml`
+4. Extract the `argocd-manager-token`
+5. Build or apply the Argo CD cluster secret in the home cluster
+6. Verify the remote cluster appears in Argo CD
+7. Test human OIDC login with a Keycloak user in `k8s-admins` or `k8s-viewers`
+
+Useful checks:
+
+```bash
+kubectl get nodes -o wide
+kubectl get pods -A
+kubectl -n platform get secret argocd-manager-token
+kubectl auth can-i get pods --all-namespaces
+```
 
 ## Authorino
 
