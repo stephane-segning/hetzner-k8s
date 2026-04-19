@@ -14,10 +14,8 @@ module "network" {
 module "firewall" {
   source = "../../modules/firewall"
 
-  name            = var.cluster_name
-  allowed_ssh_ips = var.allowed_ssh_ips
-  allowed_api_ips = var.allowed_api_ips
-  labels          = local.labels
+  name   = var.cluster_name
+  labels = local.labels
 }
 
 module "servers" {

@@ -27,9 +27,14 @@ jobs:
       TF_VAR_worker_count: ${{ vars.TF_WORKER_COUNT || '2' }}
       TF_VAR_location: ${{ vars.TF_LOCATION || 'fsn1' }}
       TF_VAR_ssh_key_ids: ${{ vars.TF_SSH_KEY_IDS || '[]' }}
-      TF_VAR_allowed_ssh_ips: ${{ vars.TF_ALLOWED_SSH_IPS || '[]' }}
-      TF_VAR_allowed_api_ips: ${{ vars.TF_ALLOWED_API_IPS || '[]' }}
       TF_VAR_api_load_balancer_type: ${{ vars.TF_API_LOAD_BALANCER_TYPE || 'lb11' }}
+      TF_VAR_api_server_hostname: ${{ vars.TF_API_SERVER_HOSTNAME || '' }}
+      TF_VAR_oidc_issuer_url: ${{ vars.TF_OIDC_ISSUER_URL || '' }}
+      TF_VAR_oidc_client_id: ${{ vars.TF_OIDC_CLIENT_ID || 'kubernetes' }}
+      TF_VAR_oidc_username_claim: ${{ vars.TF_OIDC_USERNAME_CLAIM || 'preferred_username' }}
+      TF_VAR_oidc_groups_claim: ${{ vars.TF_OIDC_GROUPS_CLAIM || 'groups' }}
+      TF_VAR_oidc_username_prefix: ${{ vars.TF_OIDC_USERNAME_PREFIX || '-' }}
+      TF_VAR_oidc_groups_prefix: ${{ vars.TF_OIDC_GROUPS_PREFIX || '' }}
       AWS_ACCESS_KEY_ID: ${{ secrets.TF_STATE_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_STATE_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: eu-central

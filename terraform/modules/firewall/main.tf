@@ -11,28 +11,6 @@ resource "hcloud_firewall" "main" {
   name   = "${var.name}-firewall"
   labels = var.labels
 
-  dynamic "rule" {
-    for_each = var.allowed_ssh_ips
-    content {
-      direction   = "in"
-      protocol    = "tcp"
-      port        = "22"
-      source_ips  = [rule.value]
-      description = "SSH access from ${rule.value}"
-    }
-  }
-
-  dynamic "rule" {
-    for_each = length(var.allowed_api_ips) > 0 ? [1] : []
-    content {
-      direction   = "in"
-      protocol    = "tcp"
-      port        = "6443"
-      source_ips  = var.allowed_api_ips
-      description = "Direct Kubernetes API server access"
-    }
-  }
-
   rule {
     direction       = "in"
     protocol        = "tcp"
@@ -40,29 +18,6 @@ resource "hcloud_firewall" "main" {
     source_ips      = ["0.0.0.0/0", "::/0"]
     description     = "Allow all outbound"
     destination_ips = ["0.0.0.0/0", "::/0"]
-  }
-
-  rule {
-    direction   = "in"
-    protocol    = "tcp"
-    port        = "80"
-    source_ips  = ["0.0.0.0/0", "::/0"]
-    description = "HTTP ingress"
-  }
-
-  rule {
-    direction   = "in"
-    protocol    = "tcp"
-    port        = "443"
-    source_ips  = ["0.0.0.0/0", "::/0"]
-    description = "HTTPS ingress"
-  }
-
-  rule {
-    direction   = "in"
-    protocol    = "icmp"
-    source_ips  = ["0.0.0.0/0", "::/0"]
-    description = "ICMP for diagnostics"
   }
 }
 

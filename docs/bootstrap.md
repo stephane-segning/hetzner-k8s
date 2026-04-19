@@ -2,6 +2,8 @@
 
 This guide covers the detailed bootstrap process for the Hetzner Kubernetes cluster.
 
+The supported operating path is GitHub Actions plus the Terraform-managed API load balancer. Direct public access to individual nodes is intentionally disabled.
+
 ## Prerequisites
 
 - Terraform >= 1.6 installed
@@ -23,7 +25,7 @@ cp terraform/envs/prod/terraform.tfvars.example terraform/envs/prod/terraform.tf
 ```hcl
 hcloud_token = "YOUR_HCLOUD_API_TOKEN"  # Required
 ssh_key_ids = ["your-ssh-key-name"]     # Your SSH key name in Hetzner
-allowed_ssh_ips = ["YOUR_IP/32"]        # Your IP for SSH access
+api_server_hostname = "k8s.example.com" # DNS name for the API load balancer
 ```
 
 ## Step 2: Initialize Terraform
@@ -72,6 +74,8 @@ This script will:
 
 At this point the nodes are expected to be registered but may not be `Ready` until Cilium is installed.
 
+Note: `make bootstrap` requires private network access or an equivalent break-glass path to the nodes. It is not part of the normal public operating model.
+
 **Expected output:**
 ```
 ==> Starting k3s cluster bootstrap
@@ -107,6 +111,18 @@ export KUBECONFIG=$(pwd)/kubeconfig
 kubectl get nodes -o wide
 kubectl get pods -A
 ```
+
+## Step 7a: Prepare Argo CD Access
+
+After the cluster is reachable through the API load balancer, use the `argocd-manager` ServiceAccount for home-cluster Argo CD registration.
+
+The scaffolded resources live in `platform/base/cluster-access.yaml`.
+
+Argo CD should store:
+
+- API server endpoint from `api_server_endpoint`
+- cluster CA data
+- bearer token from `platform/argocd-manager-token`
 
 ## Step 8: Apply Platform Components
 
@@ -154,6 +170,8 @@ kubectl get nodes -o wide
 ## Manual Bootstrap (Alternative)
 
 If the automated bootstrap fails, you can manually bootstrap:
+
+This path assumes private or console-based access to the nodes. Public SSH access is not part of the default design.
 
 ### Initialize Bootstrap Control-Plane
 

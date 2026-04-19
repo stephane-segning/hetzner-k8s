@@ -34,7 +34,10 @@ resource "hcloud_server" "main" {
 }
 
 resource "hcloud_volume" "data" {
-  for_each = var.create_volumes ? var.nodes : {}
+  for_each = var.create_volumes ? {
+    for key, node in var.nodes : key => node
+    if node.role == "worker"
+  } : {}
 
   name      = "${each.value.name}-data"
   size      = var.volume_size

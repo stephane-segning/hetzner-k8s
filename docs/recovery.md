@@ -7,17 +7,10 @@ This guide covers common recovery scenarios for the Hetzner Kubernetes cluster.
 If the entire cluster needs to be rebuilt:
 
 ```bash
-# 1. Destroy infrastructure
-make destroy
-
-# 2. Apply fresh infrastructure
-make apply
-
-# 3. Bootstrap cluster
-make bootstrap
-
-# 4. Re-apply platform components
-kubectl apply -f platform/base/
+# 1. Trigger Infra Destroy in GitHub Actions
+# 2. Trigger Infra Up in GitHub Actions
+# 3. Re-run bootstrap validation through the documented break-glass path if needed
+# 4. Re-sync platform components from home-cluster Argo CD
 ```
 
 ## Node Recovery
@@ -29,6 +22,7 @@ If a single node fails:
 1. **Check Hetzner Console**: Verify the server status
 2. **Rebuild via Terraform**:
    ```bash
+   # Break-glass local Terraform only.
    # Remove failed node from state (if needed)
    terraform -chdir=terraform/envs/prod state rm 'module.servers.hcloud_server.main[INDEX]'
    
@@ -43,13 +37,16 @@ If a single node fails:
 To completely reprovision a specific node:
 
 ```bash
-# Get node index (0-based)
-INDEX=1
+# Choose the Terraform node key, for example:
+# control-plane-01
+# control-plane-02
+# worker-01
+# worker-02
+NODE_KEY="worker-01"
 
 # Destroy specific server
 terraform -chdir=terraform/envs/prod apply \
-  -var="server_count=3" \
-  -replace='module.servers.hcloud_server.main[$INDEX]'
+  -replace="module.servers.hcloud_server.main[\"${NODE_KEY}\"]"
   
 # Wait for provisioning
 # Node will auto-join cluster
@@ -259,9 +256,9 @@ terraform -chdir=terraform/envs/prod refresh
 make get-kubeconfig
 
 # Or manually
-ssh root@$(terraform -chdir=terraform/envs/prod output -raw first_node_ip) \
+ssh root@$(terraform -chdir=terraform/envs/prod output -raw first_control_plane_ip) \
   'cat /etc/rancher/k3s/k3s.yaml' | \
-  sed 's/127.0.0.1/'$(terraform -chdir=terraform/envs/prod output -raw first_node_ip)'/g' \
+  sed 's/127.0.0.1/'$(terraform -chdir=terraform/envs/prod output -raw api_server_hostname || terraform -chdir=terraform/envs/prod output -raw api_load_balancer_ip)'/g' \
   > kubeconfig
 ```
 
@@ -272,7 +269,7 @@ ssh root@$(terraform -chdir=terraform/envs/prod output -raw first_node_ip) \
 1. **Backup critical data** (if accessible)
 2. **Destroy cluster**:
    ```bash
-   make destroy
+   # Preferred: use Infra Destroy in GitHub Actions
    ```
 3. **Rebuild from scratch**
 4. **Restore from backups** (if available)

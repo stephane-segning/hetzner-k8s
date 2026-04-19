@@ -40,7 +40,7 @@ get_outputs() {
     cd "$TF_DIR"
     
     if [ ! -f "terraform.tfstate" ]; then
-        error "No terraform state found. Run 'make apply' first."
+        error "No terraform state found. Run 'Infra Up' or a break-glass local apply first."
     fi
     
     FIRST_CONTROL_PLANE_IP=$(terraform output -raw first_control_plane_ip)
@@ -139,11 +139,15 @@ verify_cluster() {
 get_kubeconfig() {
     log "Retrieving kubeconfig..."
 
-    local api_server_ip
-    api_server_ip=$(terraform output -raw api_load_balancer_ip)
+    local api_server_host
+    api_server_host=$(terraform output -raw api_server_hostname)
+
+    if [ -z "$api_server_host" ]; then
+        api_server_host=$(terraform output -raw api_load_balancer_ip)
+    fi
     
     ssh "root@$FIRST_CONTROL_PLANE_IP" "cat /etc/rancher/k3s/k3s.yaml" | \
-        sed "s/127.0.0.1/$api_server_ip/g" > "$PROJECT_ROOT/kubeconfig"
+        sed "s/127.0.0.1/$api_server_host/g" > "$PROJECT_ROOT/kubeconfig"
     
     chmod 600 "$PROJECT_ROOT/kubeconfig"
     

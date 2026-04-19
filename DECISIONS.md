@@ -19,7 +19,7 @@ This document records key decisions made during the design of this platform.
 
 ### Node Layout: 3 Control-Plane Nodes, Optional Workers
 
-**Decision**: 3 control-plane nodes by default, with a separate worker count that starts at 0
+**Decision**: 3 control-plane nodes by default, with a separate worker count that starts at 2
 
 **Rationale**:
 - k3s supports embedded etcd for HA with 3 nodes
@@ -127,6 +127,28 @@ This document records key decisions made during the design of this platform.
 **Alternative**: Ingress directly on node IPs
 - Rejected: No HA, requires external LB or DNS failover
 
+### Kubernetes API Endpoint: Dedicated Terraform-managed LB
+
+**Decision**: Use a dedicated Terraform-managed Hetzner TCP load balancer for `:6443`
+
+**Rationale**:
+- Gives Argo CD and future human operators a stable API endpoint
+- Avoids direct public access to individual control-plane nodes
+- Keeps Kubernetes API exposure separate from in-cluster ingress ownership
+
+### Node Public Exposure: Denied
+
+**Decision**: Do not allow public ingress to individual VMs
+
+**Rationale**:
+- Forces public entry through managed load balancers only
+- Reduces attack surface on node-level SSH and service ports
+- Aligns with the desired operating model for a private cluster shape
+
+**Implementation**:
+- No public firewall rules for node `22`, `80`, `443`, or `6443`
+- Nodes retain public IPs only for outbound access unless a separate NAT design is introduced
+
 ### Ingress: Traefik
 
 **Decision**: Traefik via Helm (not built-in k3s Traefik)
@@ -158,6 +180,14 @@ This document records key decisions made during the design of this platform.
 
 **Alternative**: Longhorn
 - Rejected: More complex, higher resource usage, not initially needed
+
+### Worker-only Extra Volumes
+
+**Decision**: Extra attached data volumes are worker-only
+
+**Rationale**:
+- Keeps future Longhorn-style storage off control-plane nodes
+- Preserves control-plane nodes for cluster functions only
 
 ## Observability
 
@@ -251,7 +281,27 @@ This document records key decisions made during the design of this platform.
 **Implementation**:
 - Remote cluster registered to home Argo CD
 - Application manifests in `platform/argocd/`
-- Secrets for remote cluster access in home cluster
+- Home Argo CD should use a dedicated ServiceAccount token and CA data, not the static admin kubeconfig
+
+### Human Cluster Access: OIDC via Keycloak
+
+**Decision**: Use Kubernetes OIDC against Keycloak for human access
+
+**Rationale**:
+- Centralizes identity and group management
+- Avoids distributing static admin kubeconfigs to users
+- Fits future multi-user access better than shared static credentials
+
+**Note**:
+- Authorino is suitable for workload/API authorization behind ingress, not for fronting the Kubernetes API server itself.
+
+### Automation Access: ServiceAccount Token
+
+**Decision**: Use a dedicated ServiceAccount token for Argo CD and similar automation
+
+**Rationale**:
+- Simple and Kubernetes-native for machine access
+- Avoids dependence on the bootstrap admin kubeconfig as a long-lived secret
 
 ### Manifest Strategy: Plain YAML + Helm
 

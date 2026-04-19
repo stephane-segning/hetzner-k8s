@@ -12,19 +12,24 @@ location = "fsn1"
 
 ssh_key_ids = ["your-ssh-key-name"]
 
-allowed_ssh_ips = ["YOUR_IP/32"]
-
-# Keep this empty when using the dedicated API load balancer.
-# Set it only if you intentionally want direct API access to node public IPs.
-allowed_api_ips = []
-
 api_load_balancer_type = "lb11"
+
+# Strongly recommended when using the dedicated API load balancer.
+# Point DNS to the API load balancer IP and use the hostname here.
+api_server_hostname = "k8s.example.com"
 
 create_data_volumes = false
 data_volume_size_gb = 50
 
 k3s_version = "latest"
 k3s_token   = ""
+
+oidc_issuer_url      = "https://keycloak.example.com/realms/platform"
+oidc_client_id       = "kubernetes"
+oidc_username_claim  = "preferred_username"
+oidc_groups_claim    = "groups"
+oidc_username_prefix = "-"
+oidc_groups_prefix   = ""
 
 extra_server_args = ""
 extra_agent_args  = ""

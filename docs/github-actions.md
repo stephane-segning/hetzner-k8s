@@ -32,11 +32,14 @@ Set these as repository or environment variables:
 - `TF_SSH_KEY_IDS`: JSON list string, for example `[
   "my-ssh-key"
 ]`
-- `TF_ALLOWED_SSH_IPS`: JSON list string, for example `[
-  "203.0.113.10/32"
-]`
-- `TF_ALLOWED_API_IPS`: JSON list string, usually `[]` when using the dedicated API load balancer
 - `TF_API_LOAD_BALANCER_TYPE`: defaults to `lb11`
+- `TF_API_SERVER_HOSTNAME`: DNS name for the Kubernetes API, for example `k8s.example.com`
+- `TF_OIDC_ISSUER_URL`: Keycloak realm issuer URL
+- `TF_OIDC_CLIENT_ID`: defaults to `kubernetes`
+- `TF_OIDC_USERNAME_CLAIM`: defaults to `preferred_username`
+- `TF_OIDC_GROUPS_CLAIM`: defaults to `groups`
+- `TF_OIDC_USERNAME_PREFIX`: defaults to `-`
+- `TF_OIDC_GROUPS_PREFIX`: defaults to empty string
 
 ## Workflows
 
@@ -53,6 +56,12 @@ What it does:
 5. Runs `terraform apply -auto-approve`
 6. Powers on all Terraform-managed servers
 7. Publishes the API endpoint in the workflow summary
+
+What it does not do:
+
+- does not install Cilium, CCM, CSI, or Traefik
+- does not register the cluster in Argo CD
+- does not make nodes `Ready` by itself, because Cilium is installed afterward
 
 Use this for:
 
@@ -99,4 +108,6 @@ Use this for:
 - `Infra Down` is operationally different from `Infra Destroy`.
 - The API load balancer is Terraform-owned.
 - The Traefik ingress load balancer is Kubernetes/CCM-owned and must be cleaned up separately on destroy.
+- Node public IPs remain allocated for outbound connectivity, but inbound public access to the VMs is blocked by firewall policy.
 - If you add more CCM-managed services of type `LoadBalancer`, extend the destroy workflow so their Hetzner load balancers are deleted before Terraform destroy.
+- The workflows provision the cluster foundation. Full platform readiness still requires bootstrap validation and in-cluster platform sync.

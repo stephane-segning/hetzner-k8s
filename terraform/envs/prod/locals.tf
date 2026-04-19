@@ -6,6 +6,23 @@ locals {
 
   k3s_token = var.k3s_token != "" ? var.k3s_token : random_password.k3s_token.result
 
+  computed_server_args = compact(concat(
+    var.api_server_hostname != "" ? [
+      "--tls-san=${var.api_server_hostname}"
+    ] : [],
+    var.oidc_issuer_url != "" ? [
+      "--kube-apiserver-arg=oidc-issuer-url=${var.oidc_issuer_url}",
+      "--kube-apiserver-arg=oidc-client-id=${var.oidc_client_id}",
+      "--kube-apiserver-arg=oidc-username-claim=${var.oidc_username_claim}",
+      "--kube-apiserver-arg=oidc-groups-claim=${var.oidc_groups_claim}",
+      "--kube-apiserver-arg=oidc-username-prefix=${var.oidc_username_prefix}",
+      "--kube-apiserver-arg=oidc-groups-prefix=${var.oidc_groups_prefix}"
+    ] : [],
+    var.extra_server_args != "" ? [var.extra_server_args] : []
+  ))
+
+  rendered_server_args = join(" ", local.computed_server_args)
+
   bootstrap_server_private_ip = cidrhost(module.network.subnet_ip_range, 10)
 
   control_plane_nodes = {
@@ -20,7 +37,7 @@ locals {
         k3s_role            = "control-plane"
         initialize_cluster  = index == 0
         bootstrap_server_ip = local.bootstrap_server_private_ip
-        extra_server_args   = var.extra_server_args
+        extra_server_args   = local.rendered_server_args
         extra_agent_args    = var.extra_agent_args
       })
       labels = {
@@ -41,7 +58,7 @@ locals {
         k3s_role            = "worker"
         initialize_cluster  = false
         bootstrap_server_ip = local.bootstrap_server_private_ip
-        extra_server_args   = var.extra_server_args
+        extra_server_args   = local.rendered_server_args
         extra_agent_args    = var.extra_agent_args
       })
       labels = {

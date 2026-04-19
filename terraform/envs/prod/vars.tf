@@ -46,22 +46,16 @@ variable "ssh_key_ids" {
   default     = []
 }
 
-variable "allowed_ssh_ips" {
-  description = "IPs allowed to SSH into nodes"
-  type        = list(string)
-  default     = []
-}
-
-variable "allowed_api_ips" {
-  description = "IPs allowed to access Kubernetes API directly on node public IPs"
-  type        = list(string)
-  default     = []
-}
-
 variable "api_load_balancer_type" {
   description = "Hetzner load balancer type for the Kubernetes API endpoint"
   type        = string
   default     = "lb11"
+}
+
+variable "api_server_hostname" {
+  description = "Optional DNS hostname for the Kubernetes API endpoint. Used as a TLS SAN when set."
+  type        = string
+  default     = ""
 }
 
 variable "create_data_volumes" {
@@ -97,6 +91,42 @@ variable "extra_server_args" {
 
 variable "extra_agent_args" {
   description = "Extra arguments for k3s agents"
+  type        = string
+  default     = ""
+}
+
+variable "oidc_issuer_url" {
+  description = "OIDC issuer URL for Kubernetes API authentication"
+  type        = string
+  default     = ""
+}
+
+variable "oidc_client_id" {
+  description = "OIDC client ID for Kubernetes API authentication"
+  type        = string
+  default     = "kubernetes"
+}
+
+variable "oidc_username_claim" {
+  description = "OIDC username claim"
+  type        = string
+  default     = "preferred_username"
+}
+
+variable "oidc_groups_claim" {
+  description = "OIDC groups claim"
+  type        = string
+  default     = "groups"
+}
+
+variable "oidc_username_prefix" {
+  description = "OIDC username prefix"
+  type        = string
+  default     = "-"
+}
+
+variable "oidc_groups_prefix" {
+  description = "OIDC groups prefix"
   type        = string
   default     = ""
 }

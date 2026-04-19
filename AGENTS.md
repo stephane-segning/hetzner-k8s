@@ -16,7 +16,7 @@ This repository is operated as infrastructure code for a Hetzner-hosted k3s clus
   - subnets
   - firewalls
   - servers
-  - volumes
+  - worker-attached data volumes
   - Kubernetes API load balancer on `:6443`
 - Kubernetes/Hetzner CCM owns:
   - ingress load balancers created from `Service.type=LoadBalancer`
@@ -39,6 +39,8 @@ This repository is operated as infrastructure code for a Hetzner-hosted k3s clus
 - Keep Cilium as the cluster CNI unless the user explicitly requests a networking redesign.
 - Keep swap disabled and do not re-enable it implicitly.
 - Keep K3s `local-storage` disabled; persistent storage should go through Hetzner CSI.
+- Keep direct public node ingress disabled; public access should go through managed load balancers.
+- Keep OIDC for human access and ServiceAccounts for automation access.
 - Do not reintroduce mixed ownership for load balancers.
 - Do not add local-only operational paths as the main documented flow.
 - If a workflow depends on Terraform state, assume remote backend usage.
@@ -53,4 +55,5 @@ This repository is operated as infrastructure code for a Hetzner-hosted k3s clus
 
 - Do not commit secrets.
 - Direct node API access on `6443` stays disabled by default.
+- Direct public node SSH access stays disabled by default.
 - Human and Argo CD access should use the Terraform-managed API endpoint.
