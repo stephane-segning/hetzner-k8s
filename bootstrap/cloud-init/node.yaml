@@ -57,6 +57,7 @@ write_files:
       K3S_ROLE="${k3s_role}"
       BOOTSTRAP_SERVER_IP="${bootstrap_server_ip}"
       INSTALL_K3S_VERSION="${k3s_version}"
+      NODE_PRIVATE_IP=$(curl -s http://169.254.169.254/hetzner/v1/metadata/private-network | jq -r '.ips[0].ip')
 
       if systemctl is-active --quiet k3s || systemctl is-active --quiet k3s-agent; then
           log "k3s already active, skipping"
@@ -73,6 +74,8 @@ write_files:
           curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server" sh -s - \
             --token "$K3S_TOKEN" \
             --cluster-init \
+            --node-ip "$NODE_PRIVATE_IP" \
+            --advertise-address "$NODE_PRIVATE_IP" \
             --disable traefik \
             --disable servicelb \
             --disable local-storage \
@@ -91,6 +94,8 @@ write_files:
           curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server" sh -s - \
             --server "https://$BOOTSTRAP_SERVER_IP:6443" \
             --token "$K3S_TOKEN" \
+            --node-ip "$NODE_PRIVATE_IP" \
+            --advertise-address "$NODE_PRIVATE_IP" \
             --disable traefik \
             --disable servicelb \
             --disable local-storage \
@@ -109,7 +114,8 @@ write_files:
           log "Joining worker node"
           curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="agent" sh -s - \
             --server "https://$BOOTSTRAP_SERVER_IP:6443" \
-            --token "$K3S_TOKEN"%{ if extra_agent_args != "" } \
+            --token "$K3S_TOKEN" \
+            --node-ip "$NODE_PRIVATE_IP"%{ if extra_agent_args != "" } \
             ${extra_agent_args}%{ endif }
       fi
       

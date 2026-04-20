@@ -21,6 +21,8 @@ Recommended configuration:
 2. point it to the API load balancer IP
 3. set `api_server_hostname = "k8s.example.com"`
 
+The nodes themselves should advertise their private Hetzner network IPs to Kubernetes. This is required for Hetzner load balancers configured with private backend networking.
+
 This matters because the Kubernetes API certificate needs a SAN that matches the load-balancer-facing hostname.
 
 ## Automation access

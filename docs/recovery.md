@@ -74,6 +74,8 @@ TOKEN=$(terraform -chdir=terraform/envs/prod output -raw k3s_token)
 curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC=server sh -s - \
   --token=$TOKEN \
   --cluster-init \
+  --node-ip=<private-ip> \
+  --advertise-address=<private-ip> \
   --disable traefik \
   --disable servicelb \
   --disable local-storage \
@@ -147,6 +149,8 @@ kubectl get svc -n traefik traefik -o yaml | grep -A10 annotations
 # Restart Traefik
 kubectl rollout restart deployment traefik -n traefik
 ```
+
+If the Hetzner ingress load balancer exists but cannot reach Traefik, verify the nodes are advertising private addresses to Kubernetes.
 
 ### Cilium Issues
 

@@ -55,6 +55,8 @@ Expected:
 - firewalls
 - API load balancer on `:6443`
 
+If the cluster was bootstrapped before the private `node-ip` fix, plan a node reprovision or k3s reinstall before validating Hetzner load balancers that use private node networking.
+
 ### 3. Verify API DNS
 
 After the API LB exists:

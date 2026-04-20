@@ -74,6 +74,8 @@ This script will:
 
 At this point the nodes are expected to be registered but may not be `Ready` until Cilium is installed.
 
+Each node starts k3s with its private Hetzner network IP as `node-ip`. Control-plane nodes also advertise their private address explicitly.
+
 Note: `make bootstrap` requires private network access or an equivalent break-glass path to the nodes. It is not part of the normal public operating model.
 
 **Expected output:**
@@ -168,6 +170,8 @@ ssh root@$(terraform -chdir=terraform/envs/prod output -raw first_control_plane_
 curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC=server sh -s - \
   --token=$(terraform -chdir=terraform/envs/prod output -raw k3s_token) \
   --cluster-init \
+  --node-ip=<private-ip> \
+  --advertise-address=<private-ip> \
   --disable traefik \
   --disable servicelb \
   --disable local-storage \
@@ -187,6 +191,8 @@ TOKEN=$(terraform -chdir=terraform/envs/prod output -raw k3s_token)
 curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC=server sh -s - \
   --server=https://$SERVER_PRIVATE_IP:6443 \
   --token=$TOKEN \
+  --node-ip=<private-ip> \
+  --advertise-address=<private-ip> \
   --disable traefik \
   --disable servicelb \
   --disable local-storage \
@@ -197,7 +203,8 @@ curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC=server sh -s - \
 # Worker nodes join with INSTALL_K3S_EXEC=agent
 curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC=agent sh -s - \
   --server=https://$SERVER_PRIVATE_IP:6443 \
-  --token=$TOKEN
+  --token=$TOKEN \
+  --node-ip=<private-ip>
 ```
 
 ## Troubleshooting
@@ -231,6 +238,12 @@ curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC=agent sh -s - \
 - Wait for CCM to initialize
 - Check CCM logs: `kubectl logs -n kube-system -l app=hcloud-cloud-controller-manager`
 - Verify hcloud secret exists
+
+### Ingress Load Balancer Cannot Reach Traefik
+
+- Verify nodes advertise their private IPs in Kubernetes, not their public IPs
+- `kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{range .status.addresses[*]}  {.type}: {.address}{"\n"}{end}{"\n"}{end}'`
+- If the nodes were bootstrapped before the private `node-ip` fix, reprovision or reinstall k3s on them
 
 ## Next Steps
 

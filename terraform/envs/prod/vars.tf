@@ -73,7 +73,7 @@ variable "data_volume_size_gb" {
 variable "k3s_version" {
   description = "k3s version to install"
   type        = string
-  default     = "latest"
+  default     = "v1.35.3+k3s1"
 }
 
 variable "k3s_token" {

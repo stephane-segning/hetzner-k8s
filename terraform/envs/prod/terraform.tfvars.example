@@ -21,7 +21,7 @@ api_server_hostname = "k8s.example.com"
 create_data_volumes = false
 data_volume_size_gb = 50
 
-k3s_version = "latest"
+k3s_version = "v1.35.3+k3s1"
 k3s_token   = ""
 
 oidc_issuer_url      = "https://keycloak.example.com/realms/platform"

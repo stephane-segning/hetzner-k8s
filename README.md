@@ -30,6 +30,7 @@ This repository provisions a **Hetzner-hosted k3s cluster** on Hetzner Cloud wit
 - cloud-init driven k3s cluster initialization
 - first control-plane bootstraps the cluster
 - remaining control-plane and worker nodes join deterministically
+- k3s nodes explicitly register their private Hetzner network IPs
 - swap disabled on every node before k3s starts
 - k3s built-ins for flannel, local-storage, servicelb, and network-policy are disabled
 - kubeconfig retrieval
@@ -225,6 +226,10 @@ make bootstrap
 1. Point home-cluster Argo CD to this repository
 2. Apply `platform/argocd/` Application manifests
 3. Deploy workloads via GitOps
+
+## Existing Cluster Note
+
+If your cluster was bootstrapped before the private `node-ip` fix, reprovision or reinstall k3s on the nodes before expecting Hetzner load balancers with `use-private-ip: "true"` to behave correctly.
 
 ## Documentation
 
