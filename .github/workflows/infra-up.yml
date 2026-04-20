@@ -25,7 +25,7 @@ jobs:
       TF_VAR_worker_server_type: ${{ vars.TF_WORKER_SERVER_TYPE || 'cpx42' }}
       TF_VAR_control_plane_count: ${{ vars.TF_CONTROL_PLANE_COUNT || '3' }}
       TF_VAR_worker_count: ${{ vars.TF_WORKER_COUNT || '2' }}
-      TF_VAR_location: ${{ vars.TF_LOCATION || 'fsn1' }}
+      TF_VAR_location: ${{ vars.TF_LOCATION || 'nbg1' }}
       TF_VAR_ssh_key_ids: ${{ vars.TF_SSH_KEY_IDS || '[]' }}
       TF_VAR_api_load_balancer_type: ${{ vars.TF_API_LOAD_BALANCER_TYPE || 'lb11' }}
       TF_VAR_api_server_hostname: ${{ vars.TF_API_SERVER_HOSTNAME || '' }}

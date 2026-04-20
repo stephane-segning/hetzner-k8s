@@ -7,7 +7,7 @@ variable "image" {
 variable "location" {
   description = "Hetzner location"
   type        = string
-  default     = "fsn1"
+  default     = "nbg1"
 }
 
 variable "network_id" {

@@ -12,9 +12,9 @@ test_variable_default() {
     local var_name="$1"
     local expected_default="$2"
     local var_file="$3"
-    
+
     actual=$(grep -A5 "variable \"$var_name\"" "$var_file" | grep "default" | sed 's/.*default[[:space:]]*=[[:space:]]*//; s/"//g' | tr -d ' ')
-    
+
     if [ "$actual" = "$expected_default" ]; then
         echo "PASS: $var_name = $expected_default"
     else
@@ -28,7 +28,7 @@ test_variable_default "control_plane_server_type" "cpx22" "$PROJECT_ROOT/terrafo
 test_variable_default "worker_server_type" "cpx42" "$PROJECT_ROOT/terraform/envs/prod/vars.tf"
 test_variable_default "control_plane_count" "3" "$PROJECT_ROOT/terraform/envs/prod/vars.tf"
 test_variable_default "worker_count" "2" "$PROJECT_ROOT/terraform/envs/prod/vars.tf"
-test_variable_default "location" "fsn1" "$PROJECT_ROOT/terraform/envs/prod/vars.tf"
+test_variable_default "location" "nbg1" "$PROJECT_ROOT/terraform/envs/prod/vars.tf"
 
 echo ""
 echo "==> Testing module outputs exist"
@@ -36,7 +36,7 @@ echo "==> Testing module outputs exist"
 test_output_exists() {
     local output_name="$1"
     local output_file="$2"
-    
+
     if grep -q "output \"$output_name\"" "$output_file"; then
         echo "PASS: Output '$output_name' exists"
     else
@@ -55,7 +55,7 @@ echo "==> Testing required files exist"
 
 test_file_exists() {
     local file="$1"
-    
+
     if [ -f "$file" ]; then
         echo "PASS: $file exists"
     else
@@ -76,7 +76,7 @@ echo "==> Testing YAML structure"
 
 test_yaml_valid() {
     local yaml_file="$1"
-    
+
     if command -v python3 >/dev/null 2>&1 && python3 -c "import yaml" 2>/dev/null; then
         if python3 -c "import yaml; yaml.safe_load_all(open('$yaml_file'))" 2>/dev/null; then
             echo "PASS: $yaml_file is valid YAML"

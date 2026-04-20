@@ -37,7 +37,7 @@ variable "worker_count" {
 variable "location" {
   description = "Hetzner location"
   type        = string
-  default     = "fsn1"
+  default     = "nbg1"
 }
 
 variable "ssh_key_ids" {

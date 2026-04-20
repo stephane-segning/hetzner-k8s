@@ -56,7 +56,7 @@ Set these as repository or environment variables:
 - `TF_WORKER_SERVER_TYPE`: defaults to `cpx42`
 - `TF_CONTROL_PLANE_COUNT`: defaults to `3`
 - `TF_WORKER_COUNT`: defaults to `2`
-- `TF_LOCATION`: defaults to `fsn1`
+- `TF_LOCATION`: defaults to `nbg1`
 - `TF_SSH_KEY_IDS`: JSON list string, for example `[
   "my-ssh-key"
 ]`
