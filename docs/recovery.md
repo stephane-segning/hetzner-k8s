@@ -58,6 +58,10 @@ For control-plane nodes, do not replace more than one server in the same run. Re
 
 Use this when a control-plane server must be rebuilt because of a deliberate bootstrap or image change.
 
+Preferred path: use the `Rotate Control Plane` GitHub Actions workflow so the replacement is driven by the same remote Terraform state used for normal operations.
+
+If etcd S3 backups are enabled for the environment, make sure `Platform Up` has already refreshed the `k3s-etcd-snapshot-s3-config` Secret before rotating the next control-plane node.
+
 1. Confirm etcd snapshots are present before touching the server:
 
    ```bash

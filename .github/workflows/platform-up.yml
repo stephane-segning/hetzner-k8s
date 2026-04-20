@@ -29,6 +29,7 @@ jobs:
       TF_VAR_ssh_key_ids: ${{ vars.TF_SSH_KEY_IDS || '[]' }}
       TF_VAR_api_load_balancer_type: ${{ vars.TF_API_LOAD_BALANCER_TYPE || 'lb11' }}
       TF_VAR_api_server_hostname: ${{ vars.TF_API_SERVER_HOSTNAME || '' }}
+      TF_VAR_etcd_s3_enabled: ${{ vars.TF_ETCD_S3_ENABLED || 'true' }}
       TF_VAR_etcd_s3_config_secret_name: ${{ vars.TF_ETCD_S3_CONFIG_SECRET_NAME || 'k3s-etcd-snapshot-s3-config' }}
       TF_VAR_oidc_issuer_url: ${{ vars.TF_OIDC_ISSUER_URL || '' }}
       TF_VAR_oidc_client_id: ${{ vars.TF_OIDC_CLIENT_ID || 'kubernetes' }}

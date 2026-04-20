@@ -27,7 +27,7 @@ k3s_token   = ""
 etcd_snapshot_schedule_cron = "0 */6 * * *"
 etcd_snapshot_retention     = 14
 etcd_snapshot_compress      = true
-etcd_s3_enabled             = false
+etcd_s3_enabled             = true
 etcd_s3_config_secret_name  = "k3s-etcd-snapshot-s3-config"
 
 oidc_issuer_url      = "https://keycloak.example.com/realms/platform"

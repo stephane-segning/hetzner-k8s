@@ -1,23 +1,26 @@
-name: Infra Up
+name: Rotate Control Plane
 
 on:
   workflow_dispatch:
     inputs:
-      allow_control_plane_replacement:
-        description: Allow Terraform to delete or replace control-plane servers
+      node_key:
+        description: Control-plane Terraform key to replace, for example control-plane-01
         required: true
-        default: false
-        type: boolean
+        type: string
+      confirm_node_key:
+        description: Re-enter the same node key to confirm the replacement
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: hetzner-prod-infra
+  group: hetzner-prod-control-plane-rotation
   cancel-in-progress: false
 
 jobs:
-  apply:
+  rotate:
     runs-on: ubuntu-latest
     environment: production
     env:
@@ -56,6 +59,24 @@ jobs:
         with:
           terraform_version: 1.9.8
 
+      - name: Validate workflow input
+        env:
+          NODE_KEY: ${{ inputs.node_key }}
+          CONFIRM_NODE_KEY: ${{ inputs.confirm_node_key }}
+        run: |
+          if [ "$NODE_KEY" != "$CONFIRM_NODE_KEY" ]; then
+            echo "node_key and confirm_node_key must match" >&2
+            exit 1
+          fi
+
+          case "$NODE_KEY" in
+            control-plane-*) ;;
+            *)
+              echo "node_key must start with control-plane-" >&2
+              exit 1
+              ;;
+          esac
+
       - name: Write backend config
         run: |
           BACKEND_ENDPOINT='${{ secrets.TF_STATE_ENDPOINT }}'
@@ -88,21 +109,24 @@ jobs:
       - name: Terraform init
         run: terraform -chdir="$TF_DIR" init -reconfigure -backend-config="$GITHUB_WORKSPACE/backend.hcl"
 
-      - name: Terraform fmt
-        run: terraform fmt -check -recursive terraform/
-
       - name: Terraform validate
         run: terraform -chdir="$TF_DIR" validate
 
-      - name: Terraform plan
-        run: terraform -chdir="$TF_DIR" plan -out="$RUNNER_TEMP/tfplan"
-
-      - name: Guard control-plane replacements
+      - name: Terraform plan single control-plane replacement
         env:
-          ALLOW_CONTROL_PLANE_REPLACEMENT: ${{ inputs.allow_control_plane_replacement && 'true' || 'false' }}
+          NODE_KEY: ${{ inputs.node_key }}
+        run: |
+          terraform -chdir="$TF_DIR" plan \
+            -out="$RUNNER_TEMP/tfplan" \
+            -replace="module.servers.hcloud_server.main[\"${NODE_KEY}\"]"
+
+      - name: Guard single control-plane replacement
+        env:
+          NODE_KEY: ${{ inputs.node_key }}
         run: |
           terraform -chdir="$TF_DIR" show -json "$RUNNER_TEMP/tfplan" > "$RUNNER_TEMP/tfplan.json"
 
+          EXPECTED_ADDRESS="module.servers.hcloud_server.main[\"${NODE_KEY}\"]"
           CONTROL_PLANE_CHANGES=$(jq -r '
             .resource_changes[]
             | select(.address | test("module\\.servers\\.hcloud_server\\.main\\[\\\"control-plane-"))
@@ -110,28 +134,42 @@ jobs:
             | .address
           ' "$RUNNER_TEMP/tfplan.json")
 
-          if [ -n "$CONTROL_PLANE_CHANGES" ] && [ "$ALLOW_CONTROL_PLANE_REPLACEMENT" != "true" ]; then
+          if [ -z "$CONTROL_PLANE_CHANGES" ]; then
+            echo "No control-plane replacement was planned" >&2
+            exit 1
+          fi
+
+          UNEXPECTED_CHANGES=$(printf '%s\n' "$CONTROL_PLANE_CHANGES" | grep -Fvx "$EXPECTED_ADDRESS" || true)
+          if [ -n "$UNEXPECTED_CHANGES" ]; then
             {
-              echo "Refusing to apply because Terraform plans to replace or delete control-plane servers:"
+              echo "Plan would replace additional control-plane nodes beyond $NODE_KEY:"
               echo
-              printf '%s\n' "$CONTROL_PLANE_CHANGES"
-              echo
-              echo "Use the normal workflow for non-disruptive infra changes."
-              echo "For deliberate control-plane rotation, replace one control-plane at a time after confirming etcd snapshots are healthy."
-              echo "If this run is intentional, re-run Infra Up with allow_control_plane_replacement=true."
+              printf '%s\n' "$UNEXPECTED_CHANGES"
             } | tee -a "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
 
-      - name: Terraform apply
+          CHANGE_COUNT=$(printf '%s\n' "$CONTROL_PLANE_CHANGES" | sed '/^$/d' | wc -l | tr -d ' ')
+          if [ "$CHANGE_COUNT" != "1" ]; then
+            {
+              echo "Expected exactly one control-plane replacement, found $CHANGE_COUNT:"
+              echo
+              printf '%s\n' "$CONTROL_PLANE_CHANGES"
+            } | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Terraform apply single control-plane replacement
         run: terraform -chdir="$TF_DIR" apply -auto-approve "$RUNNER_TEMP/tfplan"
 
       - name: Ensure servers are powered on
         run: ./scripts/github/hcloud-server-power.sh poweron
 
-      - name: Show endpoint summary
+      - name: Show rotation summary
+        env:
+          NODE_KEY: ${{ inputs.node_key }}
         run: |
+          echo "Rotated control plane: $NODE_KEY" >> "$GITHUB_STEP_SUMMARY"
           echo "API endpoint: $(terraform -chdir="$TF_DIR" output -raw api_server_endpoint)" >> "$GITHUB_STEP_SUMMARY"
-          echo "API LB IP: $(terraform -chdir="$TF_DIR" output -raw api_load_balancer_ip)" >> "$GITHUB_STEP_SUMMARY"
           echo "Control planes: $(terraform -chdir="$TF_DIR" output -json control_plane_public_ips | jq length)" >> "$GITHUB_STEP_SUMMARY"
           echo "Workers: $(terraform -chdir="$TF_DIR" output -json worker_public_ips | jq length)" >> "$GITHUB_STEP_SUMMARY"

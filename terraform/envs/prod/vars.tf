@@ -116,7 +116,7 @@ variable "etcd_snapshot_compress" {
 variable "etcd_s3_enabled" {
   description = "Whether control-plane nodes should be configured to replicate etcd snapshots to S3 via a kube-system Secret"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "etcd_s3_config_secret_name" {

@@ -68,6 +68,17 @@ EOF
 )
 }
 
+is_truthy() {
+    case "${1:-}" in
+        1|true|TRUE|True|yes|YES|on|ON)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 apply_namespaces() {
     log "Applying base namespaces"
     kubectl apply -f "$PROJECT_ROOT/platform/base/namespaces.yaml"
@@ -96,8 +107,17 @@ apply_hetzner_secrets() {
 
 apply_etcd_snapshot_s3_secret() {
     local secret_name bucket endpoint access_key secret_key region folder retention lookup_type timeout
+    local etcd_s3_required="false"
+
+    if is_truthy "${ETCD_S3_ENABLED:-${TF_VAR_etcd_s3_enabled:-}}"; then
+        etcd_s3_required="true"
+    fi
 
     if [ -z "${ETCD_S3_BUCKET:-}" ] && [ -z "${ETCD_S3_ENDPOINT:-}" ] && [ -z "${ETCD_S3_ACCESS_KEY_ID:-}" ] && [ -z "${ETCD_S3_SECRET_ACCESS_KEY:-}" ]; then
+        if [ "$etcd_s3_required" = "true" ]; then
+            error "etcd S3 backups are enabled but ETCD_S3_* settings are missing"
+        fi
+
         log "Skipping k3s etcd snapshot S3 secret; ETCD_S3_* inputs are not set"
         return
     fi

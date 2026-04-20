@@ -222,6 +222,9 @@ make bootstrap
 - `Infra Down`: powers off Terraform-managed servers without destroying infra
 - `Infra Destroy`: removes the known CCM-managed ingress LB and destroys Terraform-managed infrastructure
 - `Platform Up`: installs Cilium and the base in-cluster platform layer using a bootstrap kubeconfig secret
+- `Rotate Control Plane`: replaces one control-plane node through Terraform/cloud-init without requiring local Terraform access
+
+The default production posture is that embedded-etcd snapshots are replicated to S3-compatible object storage. The same Hetzner Object Storage service can back both Terraform state and etcd snapshots, but keep them separated by bucket or at least by prefix and retention policy.
 
 ## Next Steps
 
