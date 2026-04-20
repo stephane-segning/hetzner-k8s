@@ -79,6 +79,19 @@ is_truthy() {
     esac
 }
 
+normalize_https_endpoint() {
+    local endpoint="${1:-}"
+
+    case "$endpoint" in
+        http://*|https://*)
+            printf '%s\n' "$endpoint"
+            ;;
+        *)
+            printf 'https://%s\n' "$endpoint"
+            ;;
+    esac
+}
+
 apply_namespaces() {
     log "Applying base namespaces"
     kubectl apply -f "$PROJECT_ROOT/platform/base/namespaces.yaml"
@@ -129,7 +142,7 @@ apply_etcd_snapshot_s3_secret() {
 
     secret_name="${ETCD_S3_CONFIG_SECRET_NAME:-${TF_VAR_etcd_s3_config_secret_name:-k3s-etcd-snapshot-s3-config}}"
     bucket="${ETCD_S3_BUCKET}"
-    endpoint="${ETCD_S3_ENDPOINT}"
+    endpoint="$(normalize_https_endpoint "${ETCD_S3_ENDPOINT}")"
     access_key="${ETCD_S3_ACCESS_KEY_ID}"
     secret_key="${ETCD_S3_SECRET_ACCESS_KEY}"
     region="${ETCD_S3_REGION:-eu-central}"

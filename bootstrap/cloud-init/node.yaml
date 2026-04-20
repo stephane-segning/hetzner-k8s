@@ -16,6 +16,21 @@ packages:
   - fail2ban
 
 write_files:
+  - path: /etc/rancher/k3s/config.yaml
+    content: |
+%{ if k3s_role == "control-plane" ~}
+      etcd-snapshot-schedule-cron: "${etcd_snapshot_schedule_cron}"
+      etcd-snapshot-retention: ${etcd_snapshot_retention}
+      etcd-snapshot-compress: ${etcd_snapshot_compress}
+%{ if etcd_s3_enabled ~}
+      etcd-s3: true
+      etcd-s3-config-secret: ${etcd_s3_config_secret_name}
+%{ endif ~}
+%{ else ~}
+      {}
+%{ endif ~}
+    permissions: '0600'
+
   - path: /etc/modules-load.d/k8s.conf
     content: |
       overlay
