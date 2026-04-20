@@ -1,0 +1,120 @@
+name: Verify Etcd Backups
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_snapshot_age_hours:
+        description: Maximum acceptable age in hours for the newest S3 etcd snapshot
+        required: true
+        default: "24"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hetzner-prod-etcd-backups
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      TF_VAR_etcd_s3_enabled: ${{ vars.TF_ETCD_S3_ENABLED || 'true' }}
+      ETCD_S3_CONFIG_SECRET_NAME: ${{ secrets.ETCD_S3_CONFIG_SECRET_NAME || vars.ETCD_S3_CONFIG_SECRET_NAME || 'k3s-etcd-snapshot-s3-config' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write bootstrap kubeconfig
+        env:
+          REMOTE_CLUSTER_KUBECONFIG_B64: ${{ secrets.REMOTE_CLUSTER_KUBECONFIG_B64 }}
+        run: |
+          if [ -z "$REMOTE_CLUSTER_KUBECONFIG_B64" ]; then
+            echo "REMOTE_CLUSTER_KUBECONFIG_B64 is required" >&2
+            exit 1
+          fi
+
+          printf '%s' "$REMOTE_CLUSTER_KUBECONFIG_B64" | base64 --decode > "$RUNNER_TEMP/kubeconfig"
+          chmod 600 "$RUNNER_TEMP/kubeconfig"
+          echo "KUBECONFIG=$RUNNER_TEMP/kubeconfig" >> "$GITHUB_ENV"
+
+      - name: Verify etcd S3 config secret
+        run: |
+          if [ "$TF_VAR_etcd_s3_enabled" != "true" ]; then
+            echo "TF_ETCD_S3_ENABLED is not true; skipping S3 backup verification" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          kubectl -n kube-system get secret "$ETCD_S3_CONFIG_SECRET_NAME" >/dev/null
+
+      - name: Verify S3 etcd snapshots exist and are recent
+        if: env.TF_VAR_etcd_s3_enabled == 'true'
+        env:
+          MAX_SNAPSHOT_AGE_HOURS: ${{ inputs.max_snapshot_age_hours }}
+        run: |
+          kubectl get etcdsnapshotfile -o json > "$RUNNER_TEMP/etcdsnapshotfiles.json"
+
+          TOTAL_SNAPSHOTS=$(jq '.items | length' "$RUNNER_TEMP/etcdsnapshotfiles.json")
+          S3_SNAPSHOTS=$(jq '[.items[] | select((.spec.location // "") | startswith("s3://"))] | length' "$RUNNER_TEMP/etcdsnapshotfiles.json")
+
+          if [ "$TOTAL_SNAPSHOTS" -eq 0 ]; then
+            echo "No ETCDSnapshotFile resources found in the cluster" >&2
+            exit 1
+          fi
+
+          if [ "$S3_SNAPSHOTS" -eq 0 ]; then
+            echo "No S3-backed ETCDSnapshotFile resources found" >&2
+            exit 1
+          fi
+
+          NEWEST_S3_CREATION=$(jq -r '
+            [.items[]
+              | select((.spec.location // "") | startswith("s3://"))
+              | (.status.creationTime // .metadata.creationTimestamp // "")
+            ]
+            | map(select(. != ""))
+            | sort
+            | last // ""
+          ' "$RUNNER_TEMP/etcdsnapshotfiles.json")
+
+          if [ -z "$NEWEST_S3_CREATION" ]; then
+            echo "Could not determine the creation time of the newest S3 snapshot" >&2
+            exit 1
+          fi
+
+          NOW_EPOCH=$(date -u +%s)
+          NEWEST_S3_EPOCH=$(date -u -d "$NEWEST_S3_CREATION" +%s)
+          MAX_AGE_SECONDS=$(( MAX_SNAPSHOT_AGE_HOURS * 3600 ))
+          SNAPSHOT_AGE_SECONDS=$(( NOW_EPOCH - NEWEST_S3_EPOCH ))
+
+          if [ "$SNAPSHOT_AGE_SECONDS" -gt "$MAX_AGE_SECONDS" ]; then
+            echo "Newest S3 etcd snapshot is older than ${MAX_SNAPSHOT_AGE_HOURS}h: $NEWEST_S3_CREATION" >&2
+            exit 1
+          fi
+
+          {
+            echo "Etcd backup verification passed"
+            echo
+            echo "Total snapshot resources: $TOTAL_SNAPSHOTS"
+            echo "S3 snapshot resources: $S3_SNAPSHOTS"
+            echo "Newest S3 snapshot: $NEWEST_S3_CREATION"
+            echo
+            echo "Recent S3 snapshots:"
+            jq -r '
+              [.items[]
+                | select((.spec.location // "") | startswith("s3://"))
+                | {
+                    name: .metadata.name,
+                    snapshot: .spec.snapshotName,
+                    created: (.status.creationTime // .metadata.creationTimestamp // ""),
+                    location: .spec.location
+                  }
+              ]
+              | sort_by(.created)
+              | reverse
+              | .[:10]
+              | .[]
+              | "- \(.created) \(.snapshot) -> \(.location)"
+            ' "$RUNNER_TEMP/etcdsnapshotfiles.json"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -52,45 +52,25 @@ terraform -chdir=terraform/envs/prod apply \
 # Node will auto-join cluster
 ```
 
-For control-plane nodes, do not replace more than one server in the same run. Replace one control-plane, wait for it to return to `Ready`, confirm etcd health, and only then continue with the next server.
+Do not use Terraform `-replace` as a routine control-plane maintenance path in this repository. The current bootstrap contract makes control-plane replacement recovery-grade work, especially for the `--cluster-init` node.
 
-### Rolling Control-Plane Replacement
+### Verify Etcd Backups
 
-Use this when a control-plane server must be rebuilt because of a deliberate bootstrap or image change.
+Use this before and after meaningful infrastructure changes:
 
-Preferred path: use the `Rotate Control Plane` GitHub Actions workflow so the replacement is driven by the same remote Terraform state used for normal operations.
+```bash
+kubectl get etcdsnapshotfile
+kubectl get etcdsnapshotfile -o json | jq -r '.items[] | select((.spec.location // "") | startswith("s3://")) | .spec.location'
+kubectl -n kube-system get secret k3s-etcd-snapshot-s3-config
+```
 
-If etcd S3 backups are enabled for the environment, make sure `Platform Up` has already refreshed the `k3s-etcd-snapshot-s3-config` Secret before rotating the next control-plane node.
+Supported workflow path:
 
-Do not treat `control-plane-01` like the other control-plane nodes. In the current bootstrap contract it is the `--cluster-init` node. Replacing it through Terraform/cloud-init can create a fresh single-node cluster instead of rejoining the existing one.
+1. Run `Platform Up` if the etcd S3 Secret may have changed.
+2. Run `Verify Etcd Backups` in GitHub Actions.
+3. Confirm that recent `s3://...` snapshots are present before any disruptive work.
 
-1. Confirm etcd snapshots are present before touching the server:
-
-   ```bash
-   ssh root@$(terraform -chdir=terraform/envs/prod output -raw first_control_plane_ip) \
-     sudo k3s etcd-snapshot ls
-   kubectl get etcdsnapshotfile
-   ```
-
-2. Replace exactly one non-bootstrap control-plane node:
-
-   ```bash
-    NODE_KEY="control-plane-02"
-
-   terraform -chdir=terraform/envs/prod apply \
-     -replace="module.servers.hcloud_server.main[\"${NODE_KEY}\"]"
-   ```
-
-3. Wait for the rebuilt node to rejoin and stabilize:
-
-   ```bash
-   kubectl get nodes -o wide
-   kubectl get pods -n kube-system -o wide
-   ```
-
-4. Re-check etcd snapshots and control-plane health before moving to the next node.
-
-5. Only replace `control-plane-01` as part of a deliberate recovery sequence, not during routine rolling rotation.
+If a control-plane node must be rebuilt, treat it as deliberate recovery or cluster migration work backed by verified snapshots, not as a normal day-two operation.
 
 ## k3s Recovery
 

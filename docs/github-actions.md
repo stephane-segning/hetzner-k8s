@@ -133,7 +133,7 @@ Use this for:
 - normal infra changes
 - bringing the cluster back after `Infra Down`
 
-Do not use the normal `Infra Up` path for broad control-plane reprovisioning. If bootstrap or control-plane userdata changes require replacement, roll one control-plane at a time after confirming etcd snapshots are healthy.
+Do not use the normal `Infra Up` path for control-plane reprovisioning. In the current bootstrap model, control-plane replacement is recovery work, not a supported steady-state maintenance operation.
 
 ### Infra Down
 
@@ -184,37 +184,29 @@ Use this for:
 - re-running the base platform layer after cluster rebuilds
 - reconciling the foundational platform before Argo CD fully takes over
 
-### Rotate Control Plane
+### Verify Etcd Backups
 
-File: `.github/workflows/rotate-control-plane.yml`
+File: `.github/workflows/verify-etcd-backups.yml`
 
 What it does:
 
-1. Loads remote Terraform state
-2. Plans a replacement for exactly one Terraform control-plane server key
-3. Refuses the run if any additional control-plane replacement would occur
-4. Applies the saved Terraform plan
-5. Powers servers on and publishes a short summary
-
-Safety guard:
-
-- `control-plane-01` is blocked by default because it is the `--cluster-init` node in the current bootstrap model.
-- Replacing `control-plane-01` can bootstrap a new single-node cluster and split it from the existing control-plane.
-- Only override this with `allow_bootstrap_control_plane_replacement=true` during deliberate recovery.
+1. Decodes the bootstrap kubeconfig secret
+2. Verifies the `k3s-etcd-snapshot-s3-config` Secret exists when etcd S3 backups are enabled
+3. Verifies that `ETCDSnapshotFile` resources contain S3-backed snapshots
+4. Fails if the newest S3 snapshot is older than the configured threshold
+5. Publishes a summary of recent S3 snapshots
 
 Use this for:
 
-- rolling one-by-one control-plane replacement after bootstrap changes
-- adopting new k3s control-plane flags such as etcd S3 snapshot configuration
-- repairing a single control-plane node without local Terraform access
+- confirming etcd backups are actually landing in S3
+- routine backup verification after cluster changes
+- validating the cluster before planned maintenance
 
 Recommended flow:
 
-1. Ensure `Platform Up` has already created or refreshed the `k3s-etcd-snapshot-s3-config` Secret when using etcd S3 backups.
-2. Run `Rotate Control Plane` for `control-plane-02`.
-3. Wait for the node to return and verify cluster health plus etcd snapshots.
-4. Run `Rotate Control Plane` for `control-plane-03`.
-5. Replace `control-plane-01` only as a deliberate recovery operation after confirming the recovery plan.
+1. Run `Platform Up` whenever the etcd S3 Secret may have changed.
+2. Run `Verify Etcd Backups` and confirm that recent `s3://...` snapshots are present.
+3. Treat control-plane replacement as explicit recovery or migration work, not as a routine workflow.
 
 ### Infra Destroy
 

@@ -117,8 +117,9 @@ jobs:
               printf '%s\n' "$CONTROL_PLANE_CHANGES"
               echo
               echo "Use the normal workflow for non-disruptive infra changes."
-              echo "For deliberate control-plane rotation, replace one control-plane at a time after confirming etcd snapshots are healthy."
-              echo "If this run is intentional, re-run Infra Up with allow_control_plane_replacement=true."
+              echo "Routine control-plane replacement is not a supported operation in this bootstrap model."
+              echo "Treat control-plane replacement as deliberate recovery or migration work, not a normal Infra Up run."
+              echo "If this run is intentional, re-run Infra Up with allow_control_plane_replacement=true only after confirming the recovery plan."
             } | tee -a "$GITHUB_STEP_SUMMARY"
             exit 1
           fi

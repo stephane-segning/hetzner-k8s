@@ -222,11 +222,11 @@ make bootstrap
 - `Infra Down`: powers off Terraform-managed servers without destroying infra
 - `Infra Destroy`: removes the known CCM-managed ingress LB and destroys Terraform-managed infrastructure
 - `Platform Up`: installs Cilium and the base in-cluster platform layer using a bootstrap kubeconfig secret
-- `Rotate Control Plane`: replaces one control-plane node through Terraform/cloud-init without requiring local Terraform access
+- `Verify Etcd Backups`: verifies that recent etcd snapshots exist in S3
 
 The default production posture is that embedded-etcd snapshots are replicated to S3-compatible object storage. The same Hetzner Object Storage service can back both Terraform state and etcd snapshots, but keep them separated by bucket or at least by prefix and retention policy.
 
-Control-plane rotation is asymmetric in the current bootstrap model: `control-plane-01` is the `--cluster-init` node. Treat `control-plane-02` and `control-plane-03` as the normal rolling-replacement path, and only replace `control-plane-01` during deliberate recovery.
+Routine Terraform-driven control-plane replacement is not a supported steady-state operation in the current bootstrap model. Treat control-plane replacement as deliberate recovery or migration work, and verify S3-backed etcd snapshots before any disruptive maintenance.
 
 ## Next Steps
 
