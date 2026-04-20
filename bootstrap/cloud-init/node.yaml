@@ -57,7 +57,7 @@ write_files:
       K3S_ROLE="${k3s_role}"
       BOOTSTRAP_SERVER_IP="${bootstrap_server_ip}"
       INSTALL_K3S_VERSION="${k3s_version}"
-      NODE_PRIVATE_IP=$(curl -s http://169.254.169.254/hetzner/v1/metadata/private-network | jq -r '.ips[0].ip')
+      NODE_PRIVATE_IP="${node_private_ip}"
 
       if systemctl is-active --quiet k3s || systemctl is-active --quiet k3s-agent; then
           log "k3s already active, skipping"
@@ -148,4 +148,4 @@ final_message: |
   k3s node bootstrap complete
   $HOSTNAME: $(hostname)
   IPv4: $(curl -s http://169.254.169.254/hetzner/v1/metadata/public-ipv4)
-  Private IP: $(curl -s http://169.254.169.254/hetzner/v1/metadata/private-network | jq -r '.ips[0].ip')
+  Private IP: ${node_private_ip}

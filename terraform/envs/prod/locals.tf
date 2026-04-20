@@ -45,6 +45,7 @@ locals {
         k3s_role            = "control-plane"
         initialize_cluster  = index == 0
         bootstrap_server_ip = local.bootstrap_server_private_ip
+        node_private_ip     = cidrhost(module.network.subnet_ip_range, 10 + index)
         extra_server_args   = local.rendered_server_args
         extra_agent_args    = var.extra_agent_args
       })
@@ -66,6 +67,7 @@ locals {
         k3s_role            = "worker"
         initialize_cluster  = false
         bootstrap_server_ip = local.bootstrap_server_private_ip
+        node_private_ip     = cidrhost(module.network.subnet_ip_range, 20 + index)
         extra_server_args   = local.rendered_server_args
         extra_agent_args    = var.extra_agent_args
       })
