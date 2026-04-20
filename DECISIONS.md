@@ -85,6 +85,21 @@ This document records key decisions made during the design of this platform.
 - Disable the K3s network policy controller with `--disable-network-policy`
 - Install Cilium via Helm/Argo CD in `kube-system`
 
+### Cloud Provider Mode: External CCM
+
+**Decision**: Run k3s with external cloud-provider mode and let Hetzner CCM own node cloud metadata
+
+**Rationale**:
+
+- Required for Hetzner CCM to set valid ProviderIDs
+- Required for Hetzner CCM to attach load balancer targets correctly
+- Avoids split ownership between embedded K3s cloud behavior and Hetzner CCM
+
+**Implementation**:
+
+- control planes: `--disable-cloud-controller`
+- all nodes: `--kubelet-arg cloud-provider=external`
+
 ### Swap: Disabled
 
 **Decision**: Disable swap on all nodes before k3s starts

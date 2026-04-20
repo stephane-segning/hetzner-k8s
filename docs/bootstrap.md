@@ -76,6 +76,8 @@ At this point the nodes are expected to be registered but may not be `Ready` unt
 
 Each node starts k3s with its private Hetzner network IP as `node-ip`. Control-plane nodes also advertise their private address explicitly.
 
+All nodes start kubelet with `cloud-provider=external`, and control-plane nodes disable the embedded K3s cloud controller so Hetzner CCM can set ProviderIDs and manage load balancer targets correctly.
+
 Note: `make bootstrap` requires private network access or an equivalent break-glass path to the nodes. It is not part of the normal public operating model.
 
 **Expected output:**
@@ -172,6 +174,8 @@ curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC=server sh -s - \
   --cluster-init \
   --node-ip=<private-ip> \
   --advertise-address=<private-ip> \
+  --kubelet-arg cloud-provider=external \
+  --disable-cloud-controller \
   --disable traefik \
   --disable servicelb \
   --disable local-storage \
@@ -193,6 +197,8 @@ curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC=server sh -s - \
   --token=$TOKEN \
   --node-ip=<private-ip> \
   --advertise-address=<private-ip> \
+  --kubelet-arg cloud-provider=external \
+  --disable-cloud-controller \
   --disable traefik \
   --disable servicelb \
   --disable local-storage \
@@ -204,7 +210,8 @@ curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC=server sh -s - \
 curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC=agent sh -s - \
   --server=https://$SERVER_PRIVATE_IP:6443 \
   --token=$TOKEN \
-  --node-ip=<private-ip>
+  --node-ip=<private-ip> \
+  --kubelet-arg cloud-provider=external
 ```
 
 ## Troubleshooting

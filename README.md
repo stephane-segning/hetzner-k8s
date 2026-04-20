@@ -31,6 +31,7 @@ This repository provisions a **Hetzner-hosted k3s cluster** on Hetzner Cloud wit
 - first control-plane bootstraps the cluster
 - remaining control-plane and worker nodes join deterministically
 - k3s nodes explicitly register their private Hetzner network IPs
+- k3s runs with external cloud-provider mode so Hetzner CCM can own node cloud metadata and load balancer targets
 - swap disabled on every node before k3s starts
 - k3s built-ins for flannel, local-storage, servicelb, and network-policy are disabled
 - kubeconfig retrieval

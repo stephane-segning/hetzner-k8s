@@ -76,6 +76,8 @@ write_files:
             --cluster-init \
             --node-ip "$NODE_PRIVATE_IP" \
             --advertise-address "$NODE_PRIVATE_IP" \
+            --kubelet-arg cloud-provider=external \
+            --disable-cloud-controller \
             --disable traefik \
             --disable servicelb \
             --disable local-storage \
@@ -96,6 +98,8 @@ write_files:
             --token "$K3S_TOKEN" \
             --node-ip "$NODE_PRIVATE_IP" \
             --advertise-address "$NODE_PRIVATE_IP" \
+            --kubelet-arg cloud-provider=external \
+            --disable-cloud-controller \
             --disable traefik \
             --disable servicelb \
             --disable local-storage \
@@ -115,7 +119,8 @@ write_files:
           curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="agent" sh -s - \
             --server "https://$BOOTSTRAP_SERVER_IP:6443" \
             --token "$K3S_TOKEN" \
-            --node-ip "$NODE_PRIVATE_IP"%{ if extra_agent_args != "" } \
+            --node-ip "$NODE_PRIVATE_IP" \
+            --kubelet-arg cloud-provider=external%{ if extra_agent_args != "" } \
             ${extra_agent_args}%{ endif }
       fi
       
