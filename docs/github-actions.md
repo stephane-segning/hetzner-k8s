@@ -21,6 +21,13 @@ Set these repository or environment secrets:
 - `REMOTE_CLUSTER_KUBECONFIG_B64`: base64-encoded bootstrap kubeconfig used only for the initial platform-install workflow
 - `ETCD_S3_ACCESS_KEY_ID`: optional S3 access key for k3s etcd snapshot replication
 - `ETCD_S3_SECRET_ACCESS_KEY`: optional S3 secret key for k3s etcd snapshot replication
+- `ETCD_S3_BUCKET`: optional snapshot bucket if you prefer storing it as a secret
+- `ETCD_S3_ENDPOINT`: optional snapshot endpoint if you prefer storing it as a secret
+- `ETCD_S3_REGION`: optional snapshot region if you prefer storing it as a secret
+- `ETCD_S3_FOLDER`: optional snapshot prefix if you prefer storing it as a secret
+- `ETCD_S3_RETENTION`: optional S3 retention count if you prefer storing it as a secret
+- `ETCD_S3_BUCKET_LOOKUP_TYPE`: optional lookup type if you prefer storing it as a secret
+- `ETCD_S3_CONFIG_SECRET_NAME`: optional Kubernetes Secret name override if you prefer storing it as a secret
 
 Important:
 
@@ -83,6 +90,8 @@ Set these as repository or environment variables:
 - `ETCD_S3_FOLDER`: optional snapshot folder/prefix, defaults to `<cluster-name>/etcd`
 - `ETCD_S3_RETENTION`: optional S3-side retention count, defaults to the local etcd retention setting
 - `ETCD_S3_BUCKET_LOOKUP_TYPE`: optional S3 lookup type, defaults to `path`
+
+The `Platform Up` workflow accepts the `ETCD_S3_*` settings from either GitHub Actions `secrets` or `vars`. Secrets take precedence when both are set.
 
 ## Workflows
 
