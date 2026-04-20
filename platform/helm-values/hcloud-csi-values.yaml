@@ -3,6 +3,7 @@ controller:
     existingSecret:
       name: hcloud
       key: token
+  hcloudVolumeDefaultLocation: nbg1
 
 storageClasses:
   - name: hcloud-volumes

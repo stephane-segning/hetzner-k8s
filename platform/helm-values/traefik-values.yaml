@@ -6,7 +6,7 @@ service:
   type: LoadBalancer
   annotations:
     load-balancer.hetzner.cloud/name: "traefik-ingress"
-    load-balancer.hetzner.cloud/location: "fsn1"
+    load-balancer.hetzner.cloud/location: "nbg1"
     load-balancer.hetzner.cloud/use-private-ip: "true"
     load-balancer.hetzner.cloud/health-check-interval: "10s"
     load-balancer.hetzner.cloud/health-check-timeout: "5s"
