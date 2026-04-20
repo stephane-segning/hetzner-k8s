@@ -196,6 +196,12 @@ What it does:
 4. Applies the saved Terraform plan
 5. Powers servers on and publishes a short summary
 
+Safety guard:
+
+- `control-plane-01` is blocked by default because it is the `--cluster-init` node in the current bootstrap model.
+- Replacing `control-plane-01` can bootstrap a new single-node cluster and split it from the existing control-plane.
+- Only override this with `allow_bootstrap_control_plane_replacement=true` during deliberate recovery.
+
 Use this for:
 
 - rolling one-by-one control-plane replacement after bootstrap changes
@@ -205,9 +211,10 @@ Use this for:
 Recommended flow:
 
 1. Ensure `Platform Up` has already created or refreshed the `k3s-etcd-snapshot-s3-config` Secret when using etcd S3 backups.
-2. Run `Rotate Control Plane` for `control-plane-01`.
+2. Run `Rotate Control Plane` for `control-plane-02`.
 3. Wait for the node to return and verify cluster health plus etcd snapshots.
-4. Repeat for `control-plane-02` and `control-plane-03`.
+4. Run `Rotate Control Plane` for `control-plane-03`.
+5. Replace `control-plane-01` only as a deliberate recovery operation after confirming the recovery plan.
 
 ### Infra Destroy
 

@@ -62,6 +62,8 @@ Preferred path: use the `Rotate Control Plane` GitHub Actions workflow so the re
 
 If etcd S3 backups are enabled for the environment, make sure `Platform Up` has already refreshed the `k3s-etcd-snapshot-s3-config` Secret before rotating the next control-plane node.
 
+Do not treat `control-plane-01` like the other control-plane nodes. In the current bootstrap contract it is the `--cluster-init` node. Replacing it through Terraform/cloud-init can create a fresh single-node cluster instead of rejoining the existing one.
+
 1. Confirm etcd snapshots are present before touching the server:
 
    ```bash
@@ -70,10 +72,10 @@ If etcd S3 backups are enabled for the environment, make sure `Platform Up` has 
    kubectl get etcdsnapshotfile
    ```
 
-2. Replace exactly one control-plane node:
+2. Replace exactly one non-bootstrap control-plane node:
 
    ```bash
-   NODE_KEY="control-plane-02"
+    NODE_KEY="control-plane-02"
 
    terraform -chdir=terraform/envs/prod apply \
      -replace="module.servers.hcloud_server.main[\"${NODE_KEY}\"]"
@@ -87,6 +89,8 @@ If etcd S3 backups are enabled for the environment, make sure `Platform Up` has 
    ```
 
 4. Re-check etcd snapshots and control-plane health before moving to the next node.
+
+5. Only replace `control-plane-01` as part of a deliberate recovery sequence, not during routine rolling rotation.
 
 ## k3s Recovery
 

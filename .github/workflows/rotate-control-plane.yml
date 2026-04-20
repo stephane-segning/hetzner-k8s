@@ -11,6 +11,11 @@ on:
         description: Re-enter the same node key to confirm the replacement
         required: true
         type: string
+      allow_bootstrap_control_plane_replacement:
+        description: Allow replacement of control-plane-01, which is the cluster-init node and can bootstrap a new cluster
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -63,6 +68,7 @@ jobs:
         env:
           NODE_KEY: ${{ inputs.node_key }}
           CONFIRM_NODE_KEY: ${{ inputs.confirm_node_key }}
+          ALLOW_BOOTSTRAP_CONTROL_PLANE_REPLACEMENT: ${{ inputs.allow_bootstrap_control_plane_replacement && 'true' || 'false' }}
         run: |
           if [ "$NODE_KEY" != "$CONFIRM_NODE_KEY" ]; then
             echo "node_key and confirm_node_key must match" >&2
@@ -76,6 +82,16 @@ jobs:
               exit 1
               ;;
           esac
+
+          if [ "$NODE_KEY" = "control-plane-01" ] && [ "$ALLOW_BOOTSTRAP_CONTROL_PLANE_REPLACEMENT" != "true" ]; then
+            cat >&2 <<'EOF'
+control-plane-01 is the bootstrap cluster-init node in this repository.
+Replacing it through Terraform/cloud-init can start a fresh single-node cluster and break the existing control-plane.
+Use control-plane-02 and control-plane-03 for normal rolling rotation.
+If you intentionally need to replace control-plane-01, re-run with allow_bootstrap_control_plane_replacement=true.
+EOF
+            exit 1
+          fi
 
       - name: Write backend config
         run: |

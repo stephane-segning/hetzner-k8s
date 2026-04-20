@@ -226,6 +226,8 @@ make bootstrap
 
 The default production posture is that embedded-etcd snapshots are replicated to S3-compatible object storage. The same Hetzner Object Storage service can back both Terraform state and etcd snapshots, but keep them separated by bucket or at least by prefix and retention policy.
 
+Control-plane rotation is asymmetric in the current bootstrap model: `control-plane-01` is the `--cluster-init` node. Treat `control-plane-02` and `control-plane-03` as the normal rolling-replacement path, and only replace `control-plane-01` during deliberate recovery.
+
 ## Next Steps
 
 1. Point home-cluster Argo CD to this repository
