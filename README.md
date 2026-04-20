@@ -32,6 +32,7 @@ This repository provisions a **Hetzner-hosted k3s cluster** on Hetzner Cloud wit
 - remaining control-plane and worker nodes join deterministically
 - k3s nodes explicitly register their private Hetzner network IPs
 - k3s runs with external cloud-provider mode so Hetzner CCM can own node cloud metadata and load balancer targets
+- control-plane nodes take scheduled embedded-etcd snapshots and can replicate them to S3-compatible object storage
 - swap disabled on every node before k3s starts
 - k3s built-ins for flannel, local-storage, servicelb, and network-policy are disabled
 - kubeconfig retrieval
@@ -217,7 +218,7 @@ make bootstrap
 
 ## CI/CD Flows
 
-- `Infra Up`: validates, applies Terraform, and powers on servers
+- `Infra Up`: validates, plans, refuses accidental control-plane replacement unless explicitly allowed, applies Terraform, and powers on servers
 - `Infra Down`: powers off Terraform-managed servers without destroying infra
 - `Infra Destroy`: removes the known CCM-managed ingress LB and destroys Terraform-managed infrastructure
 - `Platform Up`: installs Cilium and the base in-cluster platform layer using a bootstrap kubeconfig secret

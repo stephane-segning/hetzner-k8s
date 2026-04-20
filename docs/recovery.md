@@ -52,6 +52,38 @@ terraform -chdir=terraform/envs/prod apply \
 # Node will auto-join cluster
 ```
 
+For control-plane nodes, do not replace more than one server in the same run. Replace one control-plane, wait for it to return to `Ready`, confirm etcd health, and only then continue with the next server.
+
+### Rolling Control-Plane Replacement
+
+Use this when a control-plane server must be rebuilt because of a deliberate bootstrap or image change.
+
+1. Confirm etcd snapshots are present before touching the server:
+
+   ```bash
+   ssh root@$(terraform -chdir=terraform/envs/prod output -raw first_control_plane_ip) \
+     sudo k3s etcd-snapshot ls
+   kubectl get etcdsnapshotfile
+   ```
+
+2. Replace exactly one control-plane node:
+
+   ```bash
+   NODE_KEY="control-plane-02"
+
+   terraform -chdir=terraform/envs/prod apply \
+     -replace="module.servers.hcloud_server.main[\"${NODE_KEY}\"]"
+   ```
+
+3. Wait for the rebuilt node to rejoin and stabilize:
+
+   ```bash
+   kubectl get nodes -o wide
+   kubectl get pods -n kube-system -o wide
+   ```
+
+4. Re-check etcd snapshots and control-plane health before moving to the next node.
+
 ## k3s Recovery
 
 ### k3s Server Failure
@@ -90,10 +122,46 @@ If embedded etcd has issues:
 ```bash
 # Check etcd status
 k3s etcd-snapshot list
+```
 
-# Restore from snapshot
-k3s server --cluster-reset \
+Back up the server token as part of the same recovery set:
+
+```bash
+cp /var/lib/rancher/k3s/server/token /root/k3s-server-token.backup
+```
+
+To restore a multi-server control plane from a local snapshot:
+
+```bash
+# Stop k3s on all control-plane nodes first.
+systemctl stop k3s
+
+# On the restore source node only:
+k3s server \
+  --cluster-reset \
   --cluster-reset-restore-path=/var/lib/rancher/k3s/server/db/snapshots/FILENAME
+
+systemctl start k3s
+
+# On the other control-plane nodes before restarting k3s:
+rm -rf /var/lib/rancher/k3s/server/db/
+systemctl start k3s
+```
+
+To restore from S3, pass the snapshot filename and the S3 settings explicitly because the Kubernetes Secret is not available during restore:
+
+```bash
+k3s server \
+  --cluster-reset \
+  --cluster-reset-restore-path=FILENAME \
+  --token="$(cat /var/lib/rancher/k3s/server/token)" \
+  --etcd-s3 \
+  --etcd-s3-bucket="$ETCD_S3_BUCKET" \
+  --etcd-s3-endpoint="$ETCD_S3_ENDPOINT" \
+  --etcd-s3-region="${ETCD_S3_REGION:-eu-central}" \
+  --etcd-s3-access-key="$ETCD_S3_ACCESS_KEY_ID" \
+  --etcd-s3-secret-key="$ETCD_S3_SECRET_ACCESS_KEY" \
+  --etcd-s3-folder="${ETCD_S3_FOLDER:-hetzner-k8s/etcd}"
 ```
 
 ## Platform Component Recovery

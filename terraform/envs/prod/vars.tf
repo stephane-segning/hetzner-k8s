@@ -95,6 +95,36 @@ variable "extra_agent_args" {
   default     = ""
 }
 
+variable "etcd_snapshot_schedule_cron" {
+  description = "Cron schedule for automatic k3s etcd snapshots on control-plane nodes"
+  type        = string
+  default     = "0 */6 * * *"
+}
+
+variable "etcd_snapshot_retention" {
+  description = "Number of automatic k3s etcd snapshots to retain locally on each control-plane node"
+  type        = number
+  default     = 14
+}
+
+variable "etcd_snapshot_compress" {
+  description = "Whether to compress automatic k3s etcd snapshots"
+  type        = bool
+  default     = true
+}
+
+variable "etcd_s3_enabled" {
+  description = "Whether control-plane nodes should be configured to replicate etcd snapshots to S3 via a kube-system Secret"
+  type        = bool
+  default     = false
+}
+
+variable "etcd_s3_config_secret_name" {
+  description = "Name of the kube-system Secret that stores k3s etcd snapshot S3 settings"
+  type        = string
+  default     = "k3s-etcd-snapshot-s3-config"
+}
+
 variable "oidc_issuer_url" {
   description = "OIDC issuer URL for Kubernetes API authentication"
   type        = string

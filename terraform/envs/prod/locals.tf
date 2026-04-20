@@ -40,14 +40,19 @@ locals {
       server_type = var.control_plane_server_type
       private_ip  = cidrhost(module.network.subnet_ip_range, 10 + index)
       user_data = templatefile("${path.module}/../../../bootstrap/cloud-init/node.yaml", {
-        k3s_version         = var.k3s_version
-        k3s_token           = local.k3s_token
-        k3s_role            = "control-plane"
-        initialize_cluster  = index == 0
-        bootstrap_server_ip = local.bootstrap_server_private_ip
-        node_private_ip     = cidrhost(module.network.subnet_ip_range, 10 + index)
-        extra_server_args   = local.rendered_server_args
-        extra_agent_args    = var.extra_agent_args
+        k3s_version                 = var.k3s_version
+        k3s_token                   = local.k3s_token
+        k3s_role                    = "control-plane"
+        initialize_cluster          = index == 0
+        bootstrap_server_ip         = local.bootstrap_server_private_ip
+        node_private_ip             = cidrhost(module.network.subnet_ip_range, 10 + index)
+        etcd_snapshot_schedule_cron = var.etcd_snapshot_schedule_cron
+        etcd_snapshot_retention     = var.etcd_snapshot_retention
+        etcd_snapshot_compress      = var.etcd_snapshot_compress
+        etcd_s3_enabled             = var.etcd_s3_enabled
+        etcd_s3_config_secret_name  = var.etcd_s3_config_secret_name
+        extra_server_args           = local.rendered_server_args
+        extra_agent_args            = var.extra_agent_args
       })
       labels = {
         node_pool = "control-plane"
@@ -62,14 +67,19 @@ locals {
       server_type = var.worker_server_type
       private_ip  = cidrhost(module.network.subnet_ip_range, 20 + index)
       user_data = templatefile("${path.module}/../../../bootstrap/cloud-init/node.yaml", {
-        k3s_version         = var.k3s_version
-        k3s_token           = local.k3s_token
-        k3s_role            = "worker"
-        initialize_cluster  = false
-        bootstrap_server_ip = local.bootstrap_server_private_ip
-        node_private_ip     = cidrhost(module.network.subnet_ip_range, 20 + index)
-        extra_server_args   = local.rendered_server_args
-        extra_agent_args    = var.extra_agent_args
+        k3s_version                 = var.k3s_version
+        k3s_token                   = local.k3s_token
+        k3s_role                    = "worker"
+        initialize_cluster          = false
+        bootstrap_server_ip         = local.bootstrap_server_private_ip
+        node_private_ip             = cidrhost(module.network.subnet_ip_range, 20 + index)
+        etcd_snapshot_schedule_cron = var.etcd_snapshot_schedule_cron
+        etcd_snapshot_retention     = var.etcd_snapshot_retention
+        etcd_snapshot_compress      = var.etcd_snapshot_compress
+        etcd_s3_enabled             = var.etcd_s3_enabled
+        etcd_s3_config_secret_name  = var.etcd_s3_config_secret_name
+        extra_server_args           = local.rendered_server_args
+        extra_agent_args            = var.extra_agent_args
       })
       labels = {
         node_pool = "worker"

@@ -29,12 +29,22 @@ jobs:
       TF_VAR_ssh_key_ids: ${{ vars.TF_SSH_KEY_IDS || '[]' }}
       TF_VAR_api_load_balancer_type: ${{ vars.TF_API_LOAD_BALANCER_TYPE || 'lb11' }}
       TF_VAR_api_server_hostname: ${{ vars.TF_API_SERVER_HOSTNAME || '' }}
+      TF_VAR_etcd_s3_config_secret_name: ${{ vars.TF_ETCD_S3_CONFIG_SECRET_NAME || 'k3s-etcd-snapshot-s3-config' }}
       TF_VAR_oidc_issuer_url: ${{ vars.TF_OIDC_ISSUER_URL || '' }}
       TF_VAR_oidc_client_id: ${{ vars.TF_OIDC_CLIENT_ID || 'kubernetes' }}
       TF_VAR_oidc_username_claim: ${{ vars.TF_OIDC_USERNAME_CLAIM || 'preferred_username' }}
       TF_VAR_oidc_groups_claim: ${{ vars.TF_OIDC_GROUPS_CLAIM || 'groups' }}
       TF_VAR_oidc_username_prefix: ${{ vars.TF_OIDC_USERNAME_PREFIX || '-' }}
       TF_VAR_oidc_groups_prefix: ${{ vars.TF_OIDC_GROUPS_PREFIX || '' }}
+      ETCD_S3_ACCESS_KEY_ID: ${{ secrets.ETCD_S3_ACCESS_KEY_ID }}
+      ETCD_S3_SECRET_ACCESS_KEY: ${{ secrets.ETCD_S3_SECRET_ACCESS_KEY }}
+      ETCD_S3_BUCKET: ${{ vars.ETCD_S3_BUCKET || '' }}
+      ETCD_S3_ENDPOINT: ${{ vars.ETCD_S3_ENDPOINT || '' }}
+      ETCD_S3_REGION: ${{ vars.ETCD_S3_REGION || 'eu-central' }}
+      ETCD_S3_FOLDER: ${{ vars.ETCD_S3_FOLDER || '' }}
+      ETCD_S3_RETENTION: ${{ vars.ETCD_S3_RETENTION || '' }}
+      ETCD_S3_BUCKET_LOOKUP_TYPE: ${{ vars.ETCD_S3_BUCKET_LOOKUP_TYPE || 'path' }}
+      ETCD_S3_CONFIG_SECRET_NAME: ${{ vars.ETCD_S3_CONFIG_SECRET_NAME || 'k3s-etcd-snapshot-s3-config' }}
       AWS_ACCESS_KEY_ID: ${{ secrets.TF_STATE_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_STATE_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: eu-central

@@ -94,6 +94,55 @@ apply_hetzner_secrets() {
     kubectl get secret hcloud-csi -n kube-system >/dev/null
 }
 
+apply_etcd_snapshot_s3_secret() {
+    local secret_name bucket endpoint access_key secret_key region folder retention lookup_type timeout
+
+    if [ -z "${ETCD_S3_BUCKET:-}" ] && [ -z "${ETCD_S3_ENDPOINT:-}" ] && [ -z "${ETCD_S3_ACCESS_KEY_ID:-}" ] && [ -z "${ETCD_S3_SECRET_ACCESS_KEY:-}" ]; then
+        log "Skipping k3s etcd snapshot S3 secret; ETCD_S3_* inputs are not set"
+        return
+    fi
+
+    : "${ETCD_S3_BUCKET:?ETCD_S3_BUCKET is required when configuring etcd snapshot S3 backups}"
+    : "${ETCD_S3_ENDPOINT:?ETCD_S3_ENDPOINT is required when configuring etcd snapshot S3 backups}"
+    : "${ETCD_S3_ACCESS_KEY_ID:?ETCD_S3_ACCESS_KEY_ID is required when configuring etcd snapshot S3 backups}"
+    : "${ETCD_S3_SECRET_ACCESS_KEY:?ETCD_S3_SECRET_ACCESS_KEY is required when configuring etcd snapshot S3 backups}"
+
+    secret_name="${ETCD_S3_CONFIG_SECRET_NAME:-${TF_VAR_etcd_s3_config_secret_name:-k3s-etcd-snapshot-s3-config}}"
+    bucket="${ETCD_S3_BUCKET}"
+    endpoint="${ETCD_S3_ENDPOINT}"
+    access_key="${ETCD_S3_ACCESS_KEY_ID}"
+    secret_key="${ETCD_S3_SECRET_ACCESS_KEY}"
+    region="${ETCD_S3_REGION:-eu-central}"
+    folder="${ETCD_S3_FOLDER:-${TF_VAR_cluster_name:-hetzner-k8s}/etcd}"
+    retention="${ETCD_S3_RETENTION:-${TF_VAR_etcd_snapshot_retention:-14}}"
+    lookup_type="${ETCD_S3_BUCKET_LOOKUP_TYPE:-path}"
+    timeout="${ETCD_S3_TIMEOUT:-5m}"
+
+    log "Applying k3s etcd snapshot S3 secret '$secret_name'"
+    kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${secret_name}
+  namespace: kube-system
+type: etcd.k3s.cattle.io/s3-config-secret
+stringData:
+  etcd-s3-access-key: "${access_key}"
+  etcd-s3-bucket: "${bucket}"
+  etcd-s3-bucket-lookup-type: "${lookup_type}"
+  etcd-s3-endpoint: "${endpoint}"
+  etcd-s3-folder: "${folder}"
+  etcd-s3-insecure: "false"
+  etcd-s3-region: "${region}"
+  etcd-s3-retention: "${retention}"
+  etcd-s3-secret-key: "${secret_key}"
+  etcd-s3-skip-ssl-verify: "false"
+  etcd-s3-timeout: "${timeout}"
+EOF
+
+    kubectl get secret "${secret_name}" -n kube-system >/dev/null
+}
+
 install_ccm_and_csi() {
     log "Installing Hetzner CCM and CSI via official Helm charts"
 
@@ -162,6 +211,7 @@ main() {
     apply_namespaces
     install_cilium
     apply_hetzner_secrets
+    apply_etcd_snapshot_s3_secret
     install_ccm_and_csi
     install_traefik
     apply_cluster_basics

@@ -2,6 +2,12 @@ name: Infra Up
 
 on:
   workflow_dispatch:
+    inputs:
+      allow_control_plane_replacement:
+        description: Allow Terraform to delete or replace control-plane servers
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -29,6 +35,11 @@ jobs:
       TF_VAR_ssh_key_ids: ${{ vars.TF_SSH_KEY_IDS || '[]' }}
       TF_VAR_api_load_balancer_type: ${{ vars.TF_API_LOAD_BALANCER_TYPE || 'lb11' }}
       TF_VAR_api_server_hostname: ${{ vars.TF_API_SERVER_HOSTNAME || '' }}
+      TF_VAR_etcd_snapshot_schedule_cron: ${{ vars.TF_ETCD_SNAPSHOT_SCHEDULE_CRON || '0 */6 * * *' }}
+      TF_VAR_etcd_snapshot_retention: ${{ vars.TF_ETCD_SNAPSHOT_RETENTION || '14' }}
+      TF_VAR_etcd_snapshot_compress: ${{ vars.TF_ETCD_SNAPSHOT_COMPRESS || 'true' }}
+      TF_VAR_etcd_s3_enabled: ${{ vars.TF_ETCD_S3_ENABLED || 'false' }}
+      TF_VAR_etcd_s3_config_secret_name: ${{ vars.TF_ETCD_S3_CONFIG_SECRET_NAME || 'k3s-etcd-snapshot-s3-config' }}
       TF_VAR_oidc_issuer_url: ${{ vars.TF_OIDC_ISSUER_URL || '' }}
       TF_VAR_oidc_client_id: ${{ vars.TF_OIDC_CLIENT_ID || 'kubernetes' }}
       TF_VAR_oidc_username_claim: ${{ vars.TF_OIDC_USERNAME_CLAIM || 'preferred_username' }}
@@ -83,8 +94,37 @@ jobs:
       - name: Terraform validate
         run: terraform -chdir="$TF_DIR" validate
 
+      - name: Terraform plan
+        run: terraform -chdir="$TF_DIR" plan -out="$RUNNER_TEMP/tfplan"
+
+      - name: Guard control-plane replacements
+        env:
+          ALLOW_CONTROL_PLANE_REPLACEMENT: ${{ inputs.allow_control_plane_replacement && 'true' || 'false' }}
+        run: |
+          terraform -chdir="$TF_DIR" show -json "$RUNNER_TEMP/tfplan" > "$RUNNER_TEMP/tfplan.json"
+
+          CONTROL_PLANE_CHANGES=$(jq -r '
+            .resource_changes[]
+            | select(.address | test("module\\.servers\\.hcloud_server\\.main\\[\\\"control-plane-"))
+            | select(.change.actions | index("delete"))
+            | .address
+          ' "$RUNNER_TEMP/tfplan.json")
+
+          if [ -n "$CONTROL_PLANE_CHANGES" ] && [ "$ALLOW_CONTROL_PLANE_REPLACEMENT" != "true" ]; then
+            {
+              echo "Refusing to apply because Terraform plans to replace or delete control-plane servers:"
+              echo
+              printf '%s\n' "$CONTROL_PLANE_CHANGES"
+              echo
+              echo "Use the normal workflow for non-disruptive infra changes."
+              echo "For deliberate control-plane rotation, replace one control-plane at a time after confirming etcd snapshots are healthy."
+              echo "If this run is intentional, re-run Infra Up with allow_control_plane_replacement=true."
+            } | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
       - name: Terraform apply
-        run: terraform -chdir="$TF_DIR" apply -auto-approve
+        run: terraform -chdir="$TF_DIR" apply -auto-approve "$RUNNER_TEMP/tfplan"
 
       - name: Ensure servers are powered on
         run: ./scripts/github/hcloud-server-power.sh poweron

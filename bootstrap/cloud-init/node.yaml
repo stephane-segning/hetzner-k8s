@@ -76,6 +76,15 @@ write_files:
             --cluster-init \
             --node-ip "$NODE_PRIVATE_IP" \
             --advertise-address "$NODE_PRIVATE_IP" \
+            --etcd-snapshot-schedule-cron "${etcd_snapshot_schedule_cron}" \
+            --etcd-snapshot-retention ${etcd_snapshot_retention} \
+%{ if etcd_snapshot_compress ~}
+            --etcd-snapshot-compress \
+%{ endif ~}
+%{ if etcd_s3_enabled ~}
+            --etcd-s3 \
+            --etcd-s3-config-secret "${etcd_s3_config_secret_name}" \
+%{ endif ~}
             --kubelet-arg cloud-provider=external \
             --disable-cloud-controller \
             --disable traefik \
@@ -98,6 +107,15 @@ write_files:
             --token "$K3S_TOKEN" \
             --node-ip "$NODE_PRIVATE_IP" \
             --advertise-address "$NODE_PRIVATE_IP" \
+            --etcd-snapshot-schedule-cron "${etcd_snapshot_schedule_cron}" \
+            --etcd-snapshot-retention ${etcd_snapshot_retention} \
+%{ if etcd_snapshot_compress ~}
+            --etcd-snapshot-compress \
+%{ endif ~}
+%{ if etcd_s3_enabled ~}
+            --etcd-s3 \
+            --etcd-s3-config-secret "${etcd_s3_config_secret_name}" \
+%{ endif ~}
             --kubelet-arg cloud-provider=external \
             --disable-cloud-controller \
             --disable traefik \
