@@ -1,4 +1,8 @@
 controller:
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
   hcloudToken:
     existingSecret:
       name: hcloud

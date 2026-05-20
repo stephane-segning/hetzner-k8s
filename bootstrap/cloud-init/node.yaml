@@ -98,6 +98,7 @@ write_files:
             --etcd-s3-config-secret "${etcd_s3_config_secret_name}" \
 %{ endif ~}
             --kubelet-arg cloud-provider=external \
+            --node-taint "node-role.kubernetes.io/control-plane=true:NoSchedule" \
             --disable-cloud-controller \
             --disable traefik \
             --disable servicelb \
@@ -129,6 +130,7 @@ write_files:
             --etcd-s3-config-secret "${etcd_s3_config_secret_name}" \
 %{ endif ~}
             --kubelet-arg cloud-provider=external \
+            --node-taint "node-role.kubernetes.io/control-plane=true:NoSchedule" \
             --disable-cloud-controller \
             --disable traefik \
             --disable servicelb \
