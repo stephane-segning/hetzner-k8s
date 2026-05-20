@@ -103,6 +103,7 @@ install_cilium() {
     helm repo update >/dev/null 2>&1
     helm upgrade --install cilium cilium/cilium \
         --namespace kube-system \
+        --timeout=10m \
         --values "$PROJECT_ROOT/platform/helm-values/cilium-values.yaml"
 
     kubectl rollout status daemonset/cilium -n kube-system --timeout=10m
