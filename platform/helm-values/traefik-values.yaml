@@ -1,5 +1,5 @@
 deployment:
-  replicas: 2
+  replicas: 3
 
 service:
   enabled: true
@@ -37,11 +37,8 @@ providers:
   kubernetesIngress:
     enabled: true
     allowExternalNameServices: true
-  knative:
+  kubernetesGateway:
     enabled: true
-
-experimental:
-  knative: true
 
 logs:
   general:
@@ -90,3 +87,20 @@ metrics:
     serviceMonitor:
       enabled: false
       namespace: observability
+
+gateway:
+  namespacePolicy: All
+  listeners:
+    web:
+      namespacePolicy:
+        from: All
+    websecure:
+      port: 8443
+      protocol: HTTPS
+      namespacePolicy:
+        from: All
+      certificateRefs:
+        - name: 'wildcard-sls-ssegning-com-tls'
+          kind: Secret
+          group: ''
+      mode: Terminate
