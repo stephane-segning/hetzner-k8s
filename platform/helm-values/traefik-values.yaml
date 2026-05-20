@@ -1,6 +1,6 @@
 deployment:
-  replicas: 3
-  
+  replicas: 2
+
 service:
   enabled: true
   type: LoadBalancer
@@ -37,6 +37,11 @@ providers:
   kubernetesIngress:
     enabled: true
     allowExternalNameServices: true
+  knative:
+    enabled: true
+
+experimental:
+  knative: true
 
 logs:
   general:
