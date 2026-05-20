@@ -24,7 +24,7 @@ jobs:
       TF_VAR_etcd_s3_enabled: ${{ vars.TF_ETCD_S3_ENABLED || 'true' }}
       ETCD_S3_CONFIG_SECRET_NAME: ${{ secrets.ETCD_S3_CONFIG_SECRET_NAME || vars.ETCD_S3_CONFIG_SECRET_NAME || 'k3s-etcd-snapshot-s3-config' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Write bootstrap kubeconfig
         env:
