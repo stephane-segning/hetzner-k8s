@@ -13,6 +13,82 @@ If the entire cluster needs to be rebuilt:
 # 4. Re-sync platform components from home-cluster Argo CD
 ```
 
+## Control-Plane Loss with S3 Backups (GH Actions Only)
+
+Use this when all control-plane servers are gone but workers, the API load
+balancer, the private network, the firewall, and remote Terraform state are
+still intact, and you have valid S3 etcd snapshots. The flow is end-to-end
+GH-Actions-driven: it does not require direct SSH to the nodes.
+
+The bootstrap control-plane (`control-plane-01`) will install k3s without
+starting it, run `k3s server --cluster-reset --cluster-reset-restore-path=…`
+against your S3 snapshot inline (the in-cluster S3 Secret is not available
+during restore — it lives in the etcd you are restoring), then start k3s
+normally. The other control-plane nodes and workers join the restored cluster
+using the unchanged `random_password.k3s_token` from remote Terraform state.
+
+### Prerequisites
+
+- Remote Terraform state is intact (the `random_password.k3s_token` and the
+  network/firewall/LB resources must still be in state).
+- Worker servers are still running, or are also being recreated by the same
+  Infra Up run.
+- GH Action secrets are populated: `ETCD_S3_ACCESS_KEY_ID`,
+  `ETCD_S3_SECRET_ACCESS_KEY`, `ETCD_S3_BUCKET`, `ETCD_S3_ENDPOINT`, and
+  optionally `ETCD_S3_REGION`, `ETCD_S3_FOLDER`, `ETCD_S3_BUCKET_LOOKUP_TYPE`.
+- You know which snapshot to restore (the basename inside the S3 folder, not
+  an `s3://...` URL). Scheduled snapshots are named
+  `etcd-snapshot-<cluster>-<cp-node>-<unix>.zip`, e.g.
+  `etcd-snapshot-ssegning-hetzner-k3s-cp-1-1779775201.zip`. Any CP's snapshot
+  is fine — etcd snapshots are full, not per-node.
+
+### Procedure
+
+1. Pick the snapshot. The S3 path follows the Platform Up secret layout,
+   typically `s3://<ETCD_S3_BUCKET>/<ETCD_S3_FOLDER>/<filename>`. Default
+   folder is `<cluster_name>/etcd`.
+2. Trigger **Infra Up** in GH Actions with:
+   - `restore_from_s3 = true`
+   - `restore_snapshot_name = <filename>`
+   - `allow_control_plane_replacement = true` only if Terraform plans deletes
+     against existing control-plane resources still in state. A create-only
+     plan (state already has the CPs removed) does not require this.
+
+   The workflow's pre-flight step refuses to plan if any required ETCD_S3_*
+   secret or snapshot name is missing, so the cluster will not boot into a
+   broken half-restored state.
+3. `control-plane-01` cloud-init: installs k3s with `INSTALL_K3S_SKIP_START`,
+   runs `k3s --cluster-reset --cluster-reset-restore-path=<filename>` with
+   inline S3 credentials, then `systemctl start k3s`.
+4. `control-plane-02` and `control-plane-03` cloud-init wait on
+   `https://<bootstrap-private-ip>:6443/healthz` then join as additional
+   servers. Workers reconnect with the unchanged token.
+5. Trigger **Platform Up** in GH Actions to reconcile Cilium, Hetzner CCM/CSI,
+   Traefik, and to re-apply the `k3s-etcd-snapshot-s3-config` Secret in
+   `kube-system` so that future scheduled snapshots resume against S3.
+6. Trigger **Verify Etcd Backups** in GH Actions to confirm a recent S3
+   snapshot is present. The just-restored snapshot itself counts; a fresh
+   snapshot will land at the next `etcd_snapshot_schedule_cron` tick.
+7. Open a follow-up PR setting `restore_from_s3 = false` (and clearing
+   `restore_snapshot_name`) so the next routine Infra Up run does not attempt
+   to re-restore the same snapshot.
+
+### What you lose
+
+- Anything created in the cluster after the snapshot timestamp (namespaces,
+  CRDs, CNPG WAL beyond the snapshot, application state without an external
+  store, etc.). Re-sync from Argo CD will recreate platform manifests.
+- Pod CIDR / Cilium identity allocations may rotate; expect a brief reshuffle
+  while Cilium reconverges on the restored nodes.
+
+### Security note
+
+When `restore_from_s3 = true`, the S3 credentials are templated into the
+control-plane `user_data`. This is the same trust boundary as `HCLOUD_TOKEN`,
+which is already in `user_data`. After recovery, rotate the S3 credentials if
+your threat model requires it, and re-run Platform Up to update the
+`k3s-etcd-snapshot-s3-config` Secret.
+
 ## Node Recovery
 
 ### Single Node Failure

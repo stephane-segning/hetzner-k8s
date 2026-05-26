@@ -160,3 +160,72 @@ variable "oidc_groups_prefix" {
   type        = string
   default     = ""
 }
+
+variable "restore_from_s3" {
+  description = "If true, the bootstrap control-plane restores etcd from an S3 snapshot instead of running --cluster-init. One-shot recovery flag; flip back to false after the cluster is healthy."
+  type        = bool
+  default     = false
+}
+
+variable "restore_snapshot_name" {
+  description = "Filename of the S3 etcd snapshot to restore (e.g. etcd-snapshot-<cluster>-<cp>-<unix>.zip). Required when restore_from_s3 is true."
+  type        = string
+  default     = ""
+}
+
+variable "etcd_s3_access_key_id" {
+  description = "S3 access key for the etcd snapshot bucket. Only required when restore_from_s3 is true, because the in-cluster Secret is not yet available during restore."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "etcd_s3_secret_access_key" {
+  description = "S3 secret key for the etcd snapshot bucket. Only required when restore_from_s3 is true."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "etcd_s3_bucket" {
+  description = "S3 bucket holding etcd snapshots. Only required when restore_from_s3 is true."
+  type        = string
+  default     = ""
+}
+
+variable "etcd_s3_endpoint" {
+  description = "S3 endpoint for the etcd snapshot bucket (e.g. fsn1.your-objectstorage.com). Only required when restore_from_s3 is true."
+  type        = string
+  default     = ""
+}
+
+variable "etcd_s3_region" {
+  description = "S3 region for the etcd snapshot bucket."
+  type        = string
+  default     = "eu-central"
+}
+
+variable "etcd_s3_folder" {
+  description = "S3 folder/prefix for etcd snapshots. Defaults to <cluster_name>/etcd when empty, matching the Platform Up secret."
+  type        = string
+  default     = ""
+}
+
+variable "etcd_s3_bucket_lookup_type" {
+  description = "S3 bucket lookup type used during restore: path or dns."
+  type        = string
+  default     = "path"
+}
+
+variable "etcd_s3_insecure" {
+  description = "Allow plaintext HTTP to the S3 endpoint during restore. Stays false for Hetzner Object Storage."
+  type        = bool
+  default     = false
+}
+
+variable "etcd_s3_skip_ssl_verify" {
+  description = "Skip TLS verification against the S3 endpoint during restore. Stays false for Hetzner Object Storage."
+  type        = bool
+  default     = false
+}
+

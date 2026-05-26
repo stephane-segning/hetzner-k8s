@@ -33,27 +33,43 @@ locals {
 
   bootstrap_server_private_ip = cidrhost(module.network.subnet_ip_range, 10)
 
+  etcd_s3_folder_resolved = var.etcd_s3_folder != "" ? var.etcd_s3_folder : "${var.cluster_name}/etcd"
+
+  cloud_init_common = {
+    k3s_version                 = var.k3s_version
+    k3s_token                   = local.k3s_token
+    bootstrap_server_ip         = local.bootstrap_server_private_ip
+    etcd_snapshot_schedule_cron = var.etcd_snapshot_schedule_cron
+    etcd_snapshot_retention     = var.etcd_snapshot_retention
+    etcd_snapshot_compress      = var.etcd_snapshot_compress
+    etcd_s3_enabled             = var.etcd_s3_enabled
+    etcd_s3_config_secret_name  = var.etcd_s3_config_secret_name
+    extra_server_args           = local.rendered_server_args
+    extra_agent_args            = var.extra_agent_args
+    restore_from_s3             = var.restore_from_s3
+    restore_snapshot_name       = var.restore_snapshot_name
+    etcd_s3_access_key_id       = var.etcd_s3_access_key_id
+    etcd_s3_secret_access_key   = var.etcd_s3_secret_access_key
+    etcd_s3_bucket              = var.etcd_s3_bucket
+    etcd_s3_endpoint            = var.etcd_s3_endpoint
+    etcd_s3_region              = var.etcd_s3_region
+    etcd_s3_folder              = local.etcd_s3_folder_resolved
+    etcd_s3_bucket_lookup_type  = var.etcd_s3_bucket_lookup_type
+    etcd_s3_insecure            = var.etcd_s3_insecure
+    etcd_s3_skip_ssl_verify     = var.etcd_s3_skip_ssl_verify
+  }
+
   control_plane_nodes = {
     for index in range(var.control_plane_count) : format("control-plane-%02d", index + 1) => {
       name        = format("%s-cp-%d", var.cluster_name, index + 1)
       role        = "control-plane"
       server_type = var.control_plane_server_type
       private_ip  = cidrhost(module.network.subnet_ip_range, 10 + index)
-      user_data = templatefile("${path.module}/../../../bootstrap/cloud-init/node.yaml", {
-        k3s_version                 = var.k3s_version
-        k3s_token                   = local.k3s_token
-        k3s_role                    = "control-plane"
-        initialize_cluster          = index == 0
-        bootstrap_server_ip         = local.bootstrap_server_private_ip
-        node_private_ip             = cidrhost(module.network.subnet_ip_range, 10 + index)
-        etcd_snapshot_schedule_cron = var.etcd_snapshot_schedule_cron
-        etcd_snapshot_retention     = var.etcd_snapshot_retention
-        etcd_snapshot_compress      = var.etcd_snapshot_compress
-        etcd_s3_enabled             = var.etcd_s3_enabled
-        etcd_s3_config_secret_name  = var.etcd_s3_config_secret_name
-        extra_server_args           = local.rendered_server_args
-        extra_agent_args            = var.extra_agent_args
-      })
+      user_data = templatefile("${path.module}/../../../bootstrap/cloud-init/node.yaml", merge(local.cloud_init_common, {
+        k3s_role           = "control-plane"
+        initialize_cluster = index == 0
+        node_private_ip    = cidrhost(module.network.subnet_ip_range, 10 + index)
+      }))
       labels = {
         node_pool = "control-plane"
       }
@@ -66,21 +82,11 @@ locals {
       role        = "worker"
       server_type = var.worker_server_type
       private_ip  = cidrhost(module.network.subnet_ip_range, 20 + index)
-      user_data = templatefile("${path.module}/../../../bootstrap/cloud-init/node.yaml", {
-        k3s_version                 = var.k3s_version
-        k3s_token                   = local.k3s_token
-        k3s_role                    = "worker"
-        initialize_cluster          = false
-        bootstrap_server_ip         = local.bootstrap_server_private_ip
-        node_private_ip             = cidrhost(module.network.subnet_ip_range, 20 + index)
-        etcd_snapshot_schedule_cron = var.etcd_snapshot_schedule_cron
-        etcd_snapshot_retention     = var.etcd_snapshot_retention
-        etcd_snapshot_compress      = var.etcd_snapshot_compress
-        etcd_s3_enabled             = var.etcd_s3_enabled
-        etcd_s3_config_secret_name  = var.etcd_s3_config_secret_name
-        extra_server_args           = local.rendered_server_args
-        extra_agent_args            = var.extra_agent_args
-      })
+      user_data = templatefile("${path.module}/../../../bootstrap/cloud-init/node.yaml", merge(local.cloud_init_common, {
+        k3s_role           = "worker"
+        initialize_cluster = false
+        node_private_ip    = cidrhost(module.network.subnet_ip_range, 20 + index)
+      }))
       labels = {
         node_pool = "worker"
       }
