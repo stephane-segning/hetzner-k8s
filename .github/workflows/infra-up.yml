@@ -8,6 +8,16 @@ on:
         required: true
         default: false
         type: boolean
+      restore_from_s3:
+        description: Restore etcd from an S3 snapshot on the bootstrap control-plane instead of running --cluster-init. One-shot recovery flag.
+        required: false
+        default: false
+        type: boolean
+      restore_snapshot_name:
+        description: S3 snapshot filename to restore (required when restore_from_s3=true), e.g. etcd-snapshot-<cluster>-<cp>-<unix>.zip
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -46,11 +56,48 @@ jobs:
       TF_VAR_oidc_groups_claim: ${{ vars.TF_OIDC_GROUPS_CLAIM || 'groups' }}
       TF_VAR_oidc_username_prefix: ${{ vars.TF_OIDC_USERNAME_PREFIX || '-' }}
       TF_VAR_oidc_groups_prefix: ${{ vars.TF_OIDC_GROUPS_PREFIX || '' }}
+      TF_VAR_restore_from_s3: ${{ inputs.restore_from_s3 && 'true' || 'false' }}
+      TF_VAR_restore_snapshot_name: ${{ inputs.restore_snapshot_name || '' }}
+      TF_VAR_etcd_s3_access_key_id: ${{ secrets.ETCD_S3_ACCESS_KEY_ID || vars.ETCD_S3_ACCESS_KEY_ID || '' }}
+      TF_VAR_etcd_s3_secret_access_key: ${{ secrets.ETCD_S3_SECRET_ACCESS_KEY || vars.ETCD_S3_SECRET_ACCESS_KEY || '' }}
+      TF_VAR_etcd_s3_bucket: ${{ secrets.ETCD_S3_BUCKET || vars.ETCD_S3_BUCKET || '' }}
+      TF_VAR_etcd_s3_endpoint: ${{ secrets.ETCD_S3_ENDPOINT || vars.ETCD_S3_ENDPOINT || '' }}
+      TF_VAR_etcd_s3_region: ${{ secrets.ETCD_S3_REGION || vars.ETCD_S3_REGION || 'eu-central' }}
+      TF_VAR_etcd_s3_folder: ${{ secrets.ETCD_S3_FOLDER || vars.ETCD_S3_FOLDER || '' }}
+      TF_VAR_etcd_s3_bucket_lookup_type: ${{ secrets.ETCD_S3_BUCKET_LOOKUP_TYPE || vars.ETCD_S3_BUCKET_LOOKUP_TYPE || 'path' }}
       AWS_ACCESS_KEY_ID: ${{ secrets.TF_STATE_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_STATE_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: eu-central
     steps:
       - uses: actions/checkout@v6
+
+      - name: Validate restore inputs
+        if: ${{ inputs.restore_from_s3 }}
+        env:
+          RESTORE_SNAPSHOT_NAME: ${{ inputs.restore_snapshot_name }}
+        run: |
+          missing=()
+          [ -z "$RESTORE_SNAPSHOT_NAME" ] && missing+=("restore_snapshot_name input")
+          [ -z "$TF_VAR_etcd_s3_access_key_id" ] && missing+=("ETCD_S3_ACCESS_KEY_ID secret")
+          [ -z "$TF_VAR_etcd_s3_secret_access_key" ] && missing+=("ETCD_S3_SECRET_ACCESS_KEY secret")
+          [ -z "$TF_VAR_etcd_s3_bucket" ] && missing+=("ETCD_S3_BUCKET secret")
+          [ -z "$TF_VAR_etcd_s3_endpoint" ] && missing+=("ETCD_S3_ENDPOINT secret")
+          if [ "${#missing[@]}" -gt 0 ]; then
+            {
+              echo "restore_from_s3=true but required inputs are missing:"
+              printf '  - %s\n' "${missing[@]}"
+              echo
+              echo "Aborting before plan to avoid cloud-init failing on the bootstrap control-plane."
+            } | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          {
+            echo "Restore mode: ON"
+            echo "Snapshot: $RESTORE_SNAPSHOT_NAME"
+            echo "Bucket: $TF_VAR_etcd_s3_bucket"
+            echo "Endpoint: $TF_VAR_etcd_s3_endpoint"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: hashicorp/setup-terraform@v4
         with:

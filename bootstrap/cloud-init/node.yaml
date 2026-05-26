@@ -82,6 +82,80 @@ write_files:
       
       if [ "$K3S_ROLE" = "control-plane" ]; then
 %{ if initialize_cluster ~}
+%{ if restore_from_s3 ~}
+          log "Restoring bootstrap control-plane from S3 snapshot ${restore_snapshot_name}"
+
+          # Install k3s with all the normal server flags but do not start the
+          # service yet. The systemd unit gets the full flag set written to
+          # /etc/systemd/system/k3s.service so a later `systemctl start k3s`
+          # comes up with the same configuration as a normal bootstrap.
+          curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_START=true INSTALL_K3S_EXEC="server" sh -s - \
+            --token "$K3S_TOKEN" \
+            --cluster-init \
+            --node-ip "$NODE_PRIVATE_IP" \
+            --advertise-address "$NODE_PRIVATE_IP" \
+            --etcd-snapshot-schedule-cron "${etcd_snapshot_schedule_cron}" \
+            --etcd-snapshot-retention ${etcd_snapshot_retention} \
+%{ if etcd_snapshot_compress ~}
+            --etcd-snapshot-compress \
+%{ endif ~}
+%{ if etcd_s3_enabled ~}
+            --etcd-s3 \
+            --etcd-s3-config-secret "${etcd_s3_config_secret_name}" \
+%{ endif ~}
+            --kubelet-arg cloud-provider=external \
+            --node-taint "node-role.kubernetes.io/control-plane=true:NoSchedule" \
+            --disable-cloud-controller \
+            --disable traefik \
+            --disable servicelb \
+            --disable local-storage \
+            --disable-network-policy \
+            --flannel-backend=none \
+            --write-kubeconfig-mode "0644"%{ if extra_server_args != "" } \
+            ${extra_server_args}%{ endif }
+
+          # The in-cluster k3s-etcd-snapshot-s3-config Secret is not available
+          # during restore (it lives in the etcd we are restoring), so pass S3
+          # settings inline via a 0600 env file to keep credentials out of `ps`.
+          umask 077
+          cat > /root/etcd-restore.env <<'EOF'
+ETCD_S3_ACCESS_KEY=${etcd_s3_access_key_id}
+ETCD_S3_SECRET_KEY=${etcd_s3_secret_access_key}
+ETCD_S3_BUCKET=${etcd_s3_bucket}
+ETCD_S3_ENDPOINT=${etcd_s3_endpoint}
+ETCD_S3_REGION=${etcd_s3_region}
+ETCD_S3_FOLDER=${etcd_s3_folder}
+ETCD_S3_BUCKET_LOOKUP_TYPE=${etcd_s3_bucket_lookup_type}
+EOF
+          # shellcheck disable=SC1091
+          . /root/etcd-restore.env
+
+          log "Running k3s --cluster-reset --cluster-reset-restore-path"
+          /usr/local/bin/k3s server \
+            --cluster-reset \
+            --cluster-reset-restore-path="${restore_snapshot_name}" \
+            --token "$K3S_TOKEN" \
+            --etcd-s3 \
+            --etcd-s3-bucket "$ETCD_S3_BUCKET" \
+            --etcd-s3-endpoint "$ETCD_S3_ENDPOINT" \
+            --etcd-s3-region "$ETCD_S3_REGION" \
+            --etcd-s3-folder "$ETCD_S3_FOLDER" \
+            --etcd-s3-bucket-lookup-type "$ETCD_S3_BUCKET_LOOKUP_TYPE" \
+%{ if etcd_s3_insecure ~}
+            --etcd-s3-insecure \
+%{ endif ~}
+%{ if etcd_s3_skip_ssl_verify ~}
+            --etcd-s3-skip-ssl-verify \
+%{ endif ~}
+            --etcd-s3-access-key "$ETCD_S3_ACCESS_KEY" \
+            --etcd-s3-secret-key "$ETCD_S3_SECRET_KEY" \
+            >>"$LOG" 2>&1
+
+          shred -u /root/etcd-restore.env 2>/dev/null || rm -f /root/etcd-restore.env
+
+          log "Cluster reset complete, starting k3s normally"
+          systemctl start k3s
+%{ else ~}
           log "Initializing bootstrap control-plane"
           curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server" sh -s - \
             --token "$K3S_TOKEN" \
@@ -107,6 +181,7 @@ write_files:
             --flannel-backend=none \
             --write-kubeconfig-mode "0644"%{ if extra_server_args != "" } \
             ${extra_server_args}%{ endif }
+%{ endif ~}
 %{ else ~}
           log "Waiting for bootstrap control-plane at $BOOTSTRAP_SERVER_IP"
           until curl -sk "https://$BOOTSTRAP_SERVER_IP:6443/healthz" >/dev/null 2>&1; do
