@@ -137,11 +137,21 @@ make test
 ├── tests/               # Validation tests
 │   ├── unit/            # Unit tests
 │   └── render/          # Render validation
-├── docs/                # Additional documentation
+├── docs/                # Documentation
+│   ├── README.md        # Documentation index
+│   ├── arc42/           # arc42-style architecture documentation
+│   ├── adr/             # Architecture Decision Records
+│   ├── lessons-learned/ # Post-mortems and long-form narratives
+│   ├── recovery.md      # Recovery runbook
+│   └── ...              # Other runbooks: bootstrap, access, DNS, GH Actions
 ├── Makefile             # Automation commands
-├── DECISIONS.md         # Design decisions
+├── DECISIONS.md         # Macro design decisions (companion to docs/arc42)
 └── TESTING.md           # Test documentation
 ```
+
+For the **why** behind every non-obvious choice, start at
+[`docs/README.md`](docs/README.md) and follow links into `docs/arc42/`,
+`docs/adr/`, and `docs/lessons-learned/`.
 
 ## Make Commands
 

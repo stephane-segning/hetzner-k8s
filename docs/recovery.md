@@ -2,6 +2,20 @@
 
 This guide covers common recovery scenarios for the Hetzner Kubernetes cluster.
 
+For the **why** behind the choices below, see the ADRs:
+[0002 — Restore from S3 via Infra Up](adr/0002-restore-etcd-from-s3-via-infra-up.md),
+[0003 — Pre-decompress snapshot](adr/0003-pre-decompress-snapshot-before-cluster-reset.md),
+[0004 — Sentinel + SKIP_ENABLE](adr/0004-idempotent-restore-skip-enable-sentinel.md),
+[0005 — Private NIC bring-up](adr/0005-bring-up-private-nic-in-cloud-init.md),
+[0006 — Worker force-replace](adr/0006-force-replace-workers-on-restore.md),
+[0007 — Gate CP `-replace` on API reachability](adr/0007-gate-cp-replace-on-api-reachability.md),
+[0008 — `/livez` self-validation](adr/0008-self-validate-infra-up-via-livez-gate.md),
+[0009 — `mc` for S3 download](adr/0009-mc-for-inline-s3-download-during-restore.md),
+[0010 — `etcd-s3=false` override](adr/0010-etcd-s3-false-on-cluster-reset.md),
+[0011 — `--node-ip` on cluster-reset](adr/0011-node-ip-on-cluster-reset.md).
+For the long-form story of how those decisions came about, see the
+[May 2026 cluster-restore lessons-learned](lessons-learned/2026-05-cluster-restore.md).
+
 ## Full Cluster Rebuild
 
 If the entire cluster needs to be rebuilt:
