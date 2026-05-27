@@ -14,6 +14,7 @@ packages:
   - jq
   - tree
   - fail2ban
+  - unzip
 
 write_files:
   - path: /etc/rancher/k3s/config.yaml
@@ -49,10 +50,88 @@ write_files:
       LOG="/var/log/k3s-bootstrap.log"
       
       log() {
-          echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG"
+          echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG" >&2
       }
-      
+
       log "Starting k3s bootstrap"
+
+      K3S_TOKEN="${k3s_token}"
+      K3S_ROLE="${k3s_role}"
+      BOOTSTRAP_SERVER_IP="${bootstrap_server_ip}"
+      INSTALL_K3S_VERSION="${k3s_version}"
+      NODE_PRIVATE_IP="${node_private_ip}"
+
+      # Bring up the Hetzner private network interface.
+      #
+      # cloud-init's Hetzner datasource normally writes a netplan entry for
+      # both NICs, but when the private network attachment races with cloud-
+      # init's network rendering, the private NIC is missing from netplan
+      # and stays DOWN. The k3s server then cannot bind --node-ip/2380 to
+      # the configured private address. Detect that case and write our own
+      # netplan entry by matching the NIC's MAC.
+      ensure_private_nic() {
+          local expected_ip="$1"
+
+          if ip -4 -o addr show 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | grep -qx "$expected_ip"; then
+              log "Private IP $expected_ip already bound"
+              return 0
+          fi
+
+          local nic mac
+          for attempt in $(seq 1 60); do
+              # Pick the first link that is not loopback, not eth0/the public
+              # NIC, and not a virtual interface (docker, cilium, veth, etc.).
+              nic=$(ip -o link show 2>/dev/null \
+                  | awk -F': ' '{print $2}' \
+                  | awk -F'@' '{print $1}' \
+                  | grep -vE '^(lo|eth0|docker.*|cni.*|cilium.*|veth.*|kube-.*|flannel.*)$' \
+                  | head -1)
+              [ -n "$nic" ] && break
+              log "Waiting for private NIC to appear (attempt $attempt)"
+              sleep 2
+          done
+
+          if [ -z "$nic" ]; then
+              log "ERROR: no private NIC found after 120s"
+              return 1
+          fi
+
+          mac=$(ip link show "$nic" | awk '/link\/ether/ {print $2}')
+          log "Configuring private NIC $nic (mac=$mac) via netplan"
+
+          # Built via printf to avoid bash heredoc / YAML literal-block
+          # indentation conflicts (the bootstrap script lives inside cloud-
+          # init's content: | block where every line must share the parent
+          # indent, but heredoc bodies must start at column 1).
+          {
+              printf 'network:\n'
+              printf '  version: 2\n'
+              printf '  ethernets:\n'
+              printf '    %s:\n' "$nic"
+              printf '      match:\n'
+              printf '        macaddress: "%s"\n' "$mac"
+              printf '      dhcp4: true\n'
+              printf '      set-name: "%s"\n' "$nic"
+          } > /etc/netplan/60-private.yaml
+          chmod 0600 /etc/netplan/60-private.yaml
+
+          # Generate then apply so we surface parser errors via journal
+          netplan generate
+          netplan apply
+
+          for attempt in $(seq 1 60); do
+              if ip -4 -o addr show "$nic" 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | grep -qx "$expected_ip"; then
+                  log "Private IP $expected_ip is up on $nic"
+                  return 0
+              fi
+              sleep 2
+          done
+
+          log "ERROR: private IP $expected_ip never appeared on $nic after 120s"
+          return 1
+      }
+
+      ensure_private_nic "$NODE_PRIVATE_IP"
 
       # Kubernetes nodes should not run with swap enabled unless NodeSwap
       # is explicitly designed and tested for the cluster.
@@ -64,12 +143,6 @@ write_files:
       modprobe overlay || true
       modprobe br_netfilter || true
       sysctl --system >/dev/null 2>&1 || true
-
-      K3S_TOKEN="${k3s_token}"
-      K3S_ROLE="${k3s_role}"
-      BOOTSTRAP_SERVER_IP="${bootstrap_server_ip}"
-      INSTALL_K3S_VERSION="${k3s_version}"
-      NODE_PRIVATE_IP="${node_private_ip}"
 
       if systemctl is-active --quiet k3s || systemctl is-active --quiet k3s-agent; then
           log "k3s already active, skipping"
@@ -114,44 +187,62 @@ write_files:
             --write-kubeconfig-mode "0644"%{ if extra_server_args != "" } \
             ${extra_server_args}%{ endif }
 
-          # The in-cluster k3s-etcd-snapshot-s3-config Secret is not available
-          # during restore (it lives in the etcd we are restoring), so pass S3
-          # settings inline as shell variables. We cannot use a heredoc env
-          # file here: the heredoc body must not be indented (or bash never
-          # finds the closing EOF), but cloud-init parses this whole script as
-          # a YAML literal-block scalar that requires every line to share the
-          # parent's indent, and the YAML parser rejects de-indented lines.
-          # Inline shell assignments avoid the conflict. Single quotes plus
-          # the canonical '\'' escape keep arbitrary credentials intact, and
-          # k3s takes these values as CLI flags below, so a 0600 file would
-          # not have hidden them from `ps` anyway.
+          # k3s 1.35.x has a path-join bug in --etcd-s3 + --cluster-reset-
+          # restore-path with compressed snapshots: after downloading and
+          # decompressing to <datadir>/snapshots/<name>, k3s tries to open
+          # the file at <datadir>/snapshots/<datadir>/snapshots/<name> and
+          # fails. Sidestep it by downloading the snapshot ourselves with mc
+          # (single static binary) and passing the local path to k3s with
+          # no --etcd-s3 flag. The in-cluster S3 Secret is not available
+          # during restore (it lives in the etcd we are restoring), so the
+          # credentials must arrive inline. Inline shell vars avoid the
+          # heredoc-env-file/YAML-literal-block indentation conflict; k3s
+          # would expose them on its CLI anyway, so a 0600 file would not
+          # have hidden them from `ps`.
           ETCD_S3_ACCESS_KEY='${replace(etcd_s3_access_key_id, "'", "'\\''")}'
           ETCD_S3_SECRET_KEY='${replace(etcd_s3_secret_access_key, "'", "'\\''")}'
           ETCD_S3_BUCKET='${replace(etcd_s3_bucket, "'", "'\\''")}'
           ETCD_S3_ENDPOINT='${replace(etcd_s3_endpoint, "'", "'\\''")}'
-          ETCD_S3_REGION='${replace(etcd_s3_region, "'", "'\\''")}'
           ETCD_S3_FOLDER='${replace(etcd_s3_folder, "'", "'\\''")}'
-          ETCD_S3_BUCKET_LOOKUP_TYPE='${replace(etcd_s3_bucket_lookup_type, "'", "'\\''")}'
 
-          log "Running k3s --cluster-reset --cluster-reset-restore-path"
+          S3_SCHEME="https"
+%{ if etcd_s3_insecure ~}
+          S3_SCHEME="http"
+%{ endif ~}
+          MC_FLAGS=""
+%{ if etcd_s3_skip_ssl_verify ~}
+          MC_FLAGS="--insecure"
+%{ endif ~}
+
+          mkdir -p /var/lib/rancher/k3s/server/db/snapshots
+          chmod 0700 /var/lib/rancher/k3s/server/db/snapshots
+
+          log "Installing mc for S3 download"
+          curl -fsSLo /usr/local/bin/mc https://dl.min.io/client/mc/release/linux-amd64/mc
+          chmod 0755 /usr/local/bin/mc
+
+          log "Downloading snapshot from $S3_SCHEME://$ETCD_S3_ENDPOINT/$ETCD_S3_BUCKET/$ETCD_S3_FOLDER/${restore_snapshot_name}"
+          /usr/local/bin/mc $MC_FLAGS alias set restoresrc \
+            "$S3_SCHEME://$ETCD_S3_ENDPOINT" \
+            "$ETCD_S3_ACCESS_KEY" "$ETCD_S3_SECRET_KEY" >>"$LOG" 2>&1
+          /usr/local/bin/mc $MC_FLAGS cp \
+            "restoresrc/$ETCD_S3_BUCKET/$ETCD_S3_FOLDER/${restore_snapshot_name}" \
+            /var/lib/rancher/k3s/server/db/snapshots/ >>"$LOG" 2>&1
+          # Wipe mc credentials from disk
+          rm -rf /root/.mc
+
+          SNAP_LOCAL="/var/lib/rancher/k3s/server/db/snapshots/${restore_snapshot_name}"
+          if [ ! -s "$SNAP_LOCAL" ]; then
+              log "ERROR: snapshot did not land at $SNAP_LOCAL"
+              exit 1
+          fi
+          log "Snapshot present at $SNAP_LOCAL ($(stat -c %s "$SNAP_LOCAL") bytes)"
+
+          log "Running k3s --cluster-reset against local snapshot"
           /usr/local/bin/k3s server \
             --cluster-reset \
-            --cluster-reset-restore-path="${restore_snapshot_name}" \
+            --cluster-reset-restore-path="$SNAP_LOCAL" \
             --token "$K3S_TOKEN" \
-            --etcd-s3 \
-            --etcd-s3-bucket "$ETCD_S3_BUCKET" \
-            --etcd-s3-endpoint "$ETCD_S3_ENDPOINT" \
-            --etcd-s3-region "$ETCD_S3_REGION" \
-            --etcd-s3-folder "$ETCD_S3_FOLDER" \
-            --etcd-s3-bucket-lookup-type "$ETCD_S3_BUCKET_LOOKUP_TYPE" \
-%{ if etcd_s3_insecure ~}
-            --etcd-s3-insecure \
-%{ endif ~}
-%{ if etcd_s3_skip_ssl_verify ~}
-            --etcd-s3-skip-ssl-verify \
-%{ endif ~}
-            --etcd-s3-access-key "$ETCD_S3_ACCESS_KEY" \
-            --etcd-s3-secret-key "$ETCD_S3_SECRET_KEY" \
             >>"$LOG" 2>&1
 
           log "Cluster reset complete, starting k3s normally"
