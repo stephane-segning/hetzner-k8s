@@ -145,24 +145,49 @@ jobs:
         env:
           RESTORE_FROM_S3: ${{ inputs.restore_from_s3 && 'true' || 'false' }}
         run: |
-          # When restoring from S3, the bootstrap control-plane is the only
-          # node that runs --cluster-reset --cluster-reset-restore-path. The
-          # other control planes must be re-provisioned so they boot with an
-          # empty /var/lib/rancher/k3s/server/db/ and join the restored cluster
-          # as fresh etcd members. Their user_data is byte-identical between
-          # restore and non-restore modes, so Terraform would not otherwise
-          # replace them; we force it here only during a restore run.
+          # When restoring from S3:
+          #
+          #  - The non-bootstrap control planes must be re-provisioned so
+          #    they boot with empty /var/lib/rancher/k3s/server/db/ and
+          #    join as fresh etcd members of the restored cluster. Only
+          #    control-plane-01 actually runs --cluster-reset; the others
+          #    join. Their user_data is byte-identical between restore and
+          #    non-restore modes, so Terraform would not otherwise replace
+          #    them.
+          #
+          #  - The workers must also be re-provisioned. The restored cluster
+          #    uses the ORIGINAL Kubernetes cluster CA (the one baked into
+          #    the etcd snapshot), but any worker that ran k3s-agent against
+          #    a different cluster (e.g. the empty cluster created by a
+          #    prior failed restore attempt) has pinned the CA hash of that
+          #    other cluster in /var/lib/rancher/k3s/agent/. After restore,
+          #    those agents loop on "tls: failed to verify certificate:
+          #    x509: certificate signed by unknown authority". A fresh VM
+          #    bootstraps k3s-agent against the current API LB CA and joins
+          #    cleanly.
+          #
+          # The sentinel /var/lib/rancher/k3s/.recovery-restored on
+          # control-plane-01 ensures that re-running Infra Up with
+          # restore_from_s3=true does NOT redo --cluster-reset on top of an
+          # already-restored cluster; cp-1 just starts k3s normally. So a
+          # second restore run after the workflow forces worker replacement
+          # will replace only the workers and leave the restored cluster
+          # intact.
           replace_args=()
           if [ "$RESTORE_FROM_S3" = "true" ]; then
             while IFS= read -r addr; do
               [ -n "$addr" ] && replace_args+=("-replace=$addr")
             done < <(
-              terraform -chdir="$TF_DIR" state list 2>/dev/null \
-                | grep -E '^module\.servers\.hcloud_server\.main\["control-plane-[0-9]+"\]$' \
-                | grep -v '"control-plane-01"' || true
+              {
+                terraform -chdir="$TF_DIR" state list 2>/dev/null \
+                  | grep -E '^module\.servers\.hcloud_server\.main\["control-plane-[0-9]+"\]$' \
+                  | grep -v '"control-plane-01"'
+                terraform -chdir="$TF_DIR" state list 2>/dev/null \
+                  | grep -E '^module\.servers\.hcloud_server\.main\["worker-[0-9]+"\]$'
+              } || true
             )
             {
-              echo "Forcing replacement of non-bootstrap control planes for S3 restore:"
+              echo "Forcing replacement of non-bootstrap control planes and workers for S3 restore:"
               printf '  - %s\n' "${replace_args[@]}"
             } >> "$GITHUB_STEP_SUMMARY"
           fi
