@@ -9,6 +9,7 @@ Entry point for everything in `docs/`.
 | [`arc42/`](arc42/README.md)                   | Structural architecture documentation. Start here to understand how the system is shaped.                |
 | [`adr/`](adr/README.md)                       | Architecture Decision Records. One file per significant decision, especially the ones learned the hard way. |
 | [`lessons-learned/`](lessons-learned/README.md) | Chronological post-mortems and longer narratives.                                                       |
+| [`roadmap.md`](roadmap.md)                    | Forward-looking plan: Now / Next / Later / Wishlist, with priorities and references back to ADRs/risks. |
 | [`recovery.md`](recovery.md)                  | Operational runbook: how to recover the cluster from S3 etcd snapshots.                                 |
 | [`bootstrap.md`](bootstrap.md)                | First-time bootstrap and break-glass.                                                                    |
 | [`architecture.md`](architecture.md)          | Legacy single-page architecture overview. Being incrementally replaced by `arc42/`.                       |
