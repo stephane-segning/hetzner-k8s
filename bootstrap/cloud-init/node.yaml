@@ -159,13 +159,30 @@ write_files:
       if [ "$K3S_ROLE" = "control-plane" ]; then
 %{ if initialize_cluster ~}
 %{ if restore_from_s3 ~}
+          # Sentinel-based idempotency: if a prior cloud-init run already
+          # completed the cluster-reset-restore, just start k3s and exit.
+          # Otherwise we would attempt a second --cluster-reset against an
+          # already-populated etcd, which moves the live data aside and
+          # rewrites it from the snapshot. That's the wrong behavior on a
+          # reboot of a healthy node.
+          RECOVERY_SENTINEL=/var/lib/rancher/k3s/.recovery-restored
+          if [ -f "$RECOVERY_SENTINEL" ]; then
+              log "Recovery sentinel present at $RECOVERY_SENTINEL; restore already completed, starting k3s"
+              systemctl enable k3s >/dev/null 2>&1 || true
+              systemctl start k3s
+              exit 0
+          fi
+
           log "Restoring bootstrap control-plane from S3 snapshot ${restore_snapshot_name}"
 
-          # Install k3s with all the normal server flags but do not start the
-          # service yet. The systemd unit gets the full flag set written to
-          # /etc/systemd/system/k3s.service so a later `systemctl start k3s`
-          # comes up with the same configuration as a normal bootstrap.
-          curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_START=true INSTALL_K3S_EXEC="server" sh -s - \
+          # Install k3s with the normal server flags, but DO NOT start AND
+          # DO NOT enable the systemd unit. SKIP_ENABLE is the safety net: if
+          # this script fails after the install step but before cluster-reset
+          # completes, a reboot of the node must NOT auto-bring-up an empty
+          # k3s. That's the failure mode that left us with a fresh empty
+          # cluster joined by every node. We only enable the unit at the very
+          # end, after cluster-reset has returned 0.
+          curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_START=true INSTALL_K3S_SKIP_ENABLE=true INSTALL_K3S_EXEC="server" sh -s - \
             --token "$K3S_TOKEN" \
             --cluster-init \
             --node-ip "$NODE_PRIVATE_IP" \
@@ -190,18 +207,12 @@ write_files:
             --write-kubeconfig-mode "0644"%{ if extra_server_args != "" } \
             ${extra_server_args}%{ endif }
 
-          # k3s 1.35.x has a path-join bug in --etcd-s3 + --cluster-reset-
-          # restore-path with compressed snapshots: after downloading and
-          # decompressing to <datadir>/snapshots/<name>, k3s tries to open
-          # the file at <datadir>/snapshots/<datadir>/snapshots/<name> and
-          # fails. Sidestep it by downloading the snapshot ourselves with mc
-          # (single static binary) and passing the local path to k3s with
-          # no --etcd-s3 flag. The in-cluster S3 Secret is not available
-          # during restore (it lives in the etcd we are restoring), so the
-          # credentials must arrive inline. Inline shell vars avoid the
-          # heredoc-env-file/YAML-literal-block indentation conflict; k3s
-          # would expose them on its CLI anyway, so a 0600 file would not
-          # have hidden them from `ps`.
+          # The in-cluster k3s-etcd-snapshot-s3-config Secret is not available
+          # during restore (it lives in the etcd we are restoring), so S3
+          # creds arrive inline as shell variables. Inline avoids the
+          # heredoc/YAML-literal-block indentation conflict, and k3s would
+          # expose them as CLI flags anyway, so a 0600 file would not have
+          # hidden them from `ps`.
           ETCD_S3_ACCESS_KEY='${replace(etcd_s3_access_key_id, "'", "'\\''")}'
           ETCD_S3_SECRET_KEY='${replace(etcd_s3_secret_access_key, "'", "'\\''")}'
           ETCD_S3_BUCKET='${replace(etcd_s3_bucket, "'", "'\\''")}'
@@ -238,56 +249,84 @@ write_files:
           MC_CONFIG_DIR=$(mktemp -d)
           trap 'rm -rf "$MC_CONFIG_DIR"' EXIT
 
-          log "Downloading snapshot from $S3_SCHEME://$ETCD_S3_ENDPOINT/$ETCD_S3_BUCKET/$ETCD_S3_FOLDER/$RESTORE_SNAPSHOT_NAME"
+          # Refuse to proceed if the operator forgot to pass restore_snapshot_name
+          # while flipping restore_from_s3=true. The workflow already guards
+          # this in Validate restore inputs, but defending here too means a
+          # local Terraform apply (break-glass) can't silently no-op.
+          if [ -z "$RESTORE_SNAPSHOT_NAME" ]; then
+              log "ERROR: restore_from_s3 is true but restore_snapshot_name is empty"
+              exit 1
+          fi
+
+          # Defensive basename: trim any directory prefix the operator may
+          # have pasted (subfolder/x.zip, s3://... URL, absolute path).
+          SNAPSHOT_BASENAME="$${RESTORE_SNAPSHOT_NAME##*/}"
+
+          log "Downloading snapshot from $S3_SCHEME://$ETCD_S3_ENDPOINT/$ETCD_S3_BUCKET/$ETCD_S3_FOLDER/$SNAPSHOT_BASENAME"
           /usr/local/bin/mc --config-dir "$MC_CONFIG_DIR" $MC_FLAGS alias set restoresrc \
             "$S3_SCHEME://$ETCD_S3_ENDPOINT" \
             "$ETCD_S3_ACCESS_KEY" "$ETCD_S3_SECRET_KEY" >>"$LOG" 2>&1
           /usr/local/bin/mc --config-dir "$MC_CONFIG_DIR" $MC_FLAGS cp \
-            "restoresrc/$ETCD_S3_BUCKET/$ETCD_S3_FOLDER/$RESTORE_SNAPSHOT_NAME" \
+            "restoresrc/$ETCD_S3_BUCKET/$ETCD_S3_FOLDER/$SNAPSHOT_BASENAME" \
             "$SNAPSHOTS_DIR/" >>"$LOG" 2>&1
 
-          SNAP_LOCAL="$SNAPSHOTS_DIR/$RESTORE_SNAPSHOT_NAME"
-          if [ ! -s "$SNAP_LOCAL" ]; then
-              log "ERROR: snapshot did not land at $SNAP_LOCAL"
+          SNAP_ZIP="$SNAPSHOTS_DIR/$SNAPSHOT_BASENAME"
+          if [ ! -f "$SNAP_ZIP" ] || [ ! -s "$SNAP_ZIP" ]; then
+              log "ERROR: snapshot did not land as a non-empty file at $SNAP_ZIP"
               exit 1
           fi
-          log "Snapshot present at $SNAP_LOCAL ($(stat -c %s "$SNAP_LOCAL") bytes)"
+          log "Snapshot present at $SNAP_ZIP ($(stat -c %s "$SNAP_ZIP") bytes)"
 
-          # Three k3s 1.35.x quirks have to line up here:
+          # k3s 1.35.x bug: when --cluster-reset-restore-path ends in .zip,
+          # the decompress step runs filepath.Join(snapshotsDir, restorePath)
+          # against the (already-absolute) restore path. Go's filepath.Join
+          # does not strip the leading slash from an absolute second arg, so
+          # the doubled prefix /var/lib/.../snapshots/var/lib/.../snapshots/
+          # <file> is what k3s tries to open, and it fails. Reference:
+          # pkg/etcd/snapshot.go::decompressSnapshot in the k3s tree.
           #
-          # 1. config.yaml has `etcd-s3: true` so the regular service keeps
-          #    shipping scheduled snapshots. k3s merges config.yaml into the
-          #    cluster-reset invocation too; pass --etcd-s3=false to force-
-          #    disable it for the one-shot run so we are not back on the S3
-          #    code path we just bypassed by downloading locally.
-          #
-          # 2. Path resolution in --cluster-reset-restore-path is split across
-          #    two code paths in 1.35.x:
-          #    - An absolute path is passed through filepath.Join(snapshotsDir,
-          #      restorePath). Go's filepath.Join does not strip a leading
-          #      slash from the second arg, so the result is
-          #      /var/lib/.../snapshots/var/lib/.../snapshots/<file>: no such
-          #      file or directory. Observed in runs/26485441739.
-          #    - A basename is NOT joined with snapshotsDir; etcd then
-          #      stats the literal basename relative to k3s' CWD and
-          #      reports "etcd: snapshot path does not exist: <basename>".
-          #      Observed in runs/26487350265.
-          #    Reconcile both by passing the basename AND `cd`-ing to the
-          #    snapshots dir so the literal basename resolves to a real file
-          #    via CWD whichever code path k3s picks.
-          #
-          # 3. $${VAR##*/} defensively trims any directory prefix the operator
-          #    might have pasted (subfolder/x.zip, s3://... URL, abs path).
-          SNAPSHOT_BASENAME="$${RESTORE_SNAPSHOT_NAME##*/}"
-          log "Running k3s --cluster-reset using basename $SNAPSHOT_BASENAME (cwd=$SNAPSHOTS_DIR)"
-          ( cd "$SNAPSHOTS_DIR" && /usr/local/bin/k3s server \
-              --cluster-reset \
-              --cluster-reset-restore-path="$SNAPSHOT_BASENAME" \
-              --token "$K3S_TOKEN" \
-              --etcd-s3=false \
-              >>"$LOG" 2>&1 )
+          # The else branch of pkg/etcd/etcd.go::Restore (non-.zip path)
+          # uses ClusterResetRestorePath verbatim with no join, no bug. So
+          # we pre-decompress the snapshot here and pass the absolute path
+          # of the uncompressed file. The inner-archive entry has the same
+          # name as the .zip minus the extension, so unzip writes the
+          # uncompressed file next to it as <basename minus .zip>.
+          case "$SNAPSHOT_BASENAME" in
+              *.zip)
+                  log "Pre-decompressing $SNAPSHOT_BASENAME to dodge k3s 1.35.x decompressSnapshot path-join bug"
+                  unzip -o "$SNAP_ZIP" -d "$SNAPSHOTS_DIR" >>"$LOG" 2>&1
+                  SNAP_RESTORE="$SNAPSHOTS_DIR/$${SNAPSHOT_BASENAME%.zip}"
+                  ;;
+              *)
+                  SNAP_RESTORE="$SNAP_ZIP"
+                  ;;
+          esac
 
-          log "Cluster reset complete, starting k3s normally"
+          if [ ! -f "$SNAP_RESTORE" ] || [ ! -s "$SNAP_RESTORE" ]; then
+              log "ERROR: uncompressed snapshot not a non-empty file at $SNAP_RESTORE"
+              exit 1
+          fi
+          log "Uncompressed snapshot ready at $SNAP_RESTORE ($(stat -c %s "$SNAP_RESTORE") bytes)"
+
+          # config.yaml has `etcd-s3: true` for the regular service. k3s
+          # merges config.yaml into every server invocation including this
+          # cluster-reset; pass --etcd-s3=false to force-disable for the
+          # one-shot run, otherwise k3s tries to re-fetch via S3.
+          log "Running k3s --cluster-reset against $SNAP_RESTORE"
+          /usr/local/bin/k3s server \
+            --cluster-reset \
+            --cluster-reset-restore-path="$SNAP_RESTORE" \
+            --token "$K3S_TOKEN" \
+            --etcd-s3=false \
+            >>"$LOG" 2>&1
+
+          # cluster-reset returned 0 — etcd is now populated with the snapshot
+          # data. Mark the sentinel BEFORE enabling so that even if k3s start
+          # fails, subsequent cloud-init invocations don't redo the restore.
+          touch "$RECOVERY_SENTINEL"
+          chmod 0600 "$RECOVERY_SENTINEL"
+          log "Cluster reset complete; enabling and starting k3s"
+          systemctl enable k3s
           systemctl start k3s
 %{ else ~}
           log "Initializing bootstrap control-plane"
