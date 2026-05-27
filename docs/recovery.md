@@ -64,9 +64,21 @@ using the unchanged `random_password.k3s_token` from remote Terraform state.
    `--cluster-reset --cluster-reset-restore-path`. The other CPs must boot
    fresh (empty `/var/lib/rancher/k3s/server/db/`) and join as new etcd
    members, otherwise their stale member IDs would prevent quorum.
-4. `control-plane-01` cloud-init: installs k3s with `INSTALL_K3S_SKIP_START`,
-   runs `k3s --cluster-reset --cluster-reset-restore-path=<filename>` with
-   inline S3 credentials, then `systemctl start k3s`.
+4. `control-plane-01` cloud-init:
+   - installs k3s with `INSTALL_K3S_SKIP_START=true` **and**
+     `INSTALL_K3S_SKIP_ENABLE=true` so a partial failure cannot be
+     "rescued" by systemd auto-starting an empty k3s on the next boot.
+   - downloads the snapshot from S3 with `mc` (a single static binary).
+   - pre-decompresses the snapshot via `unzip` and passes the absolute
+     path of the **uncompressed** file to `--cluster-reset-restore-path`.
+     This sidesteps a k3s 1.35.x bug in
+     [`pkg/etcd/snapshot.go::decompressSnapshot`](https://github.com/k3s-io/k3s/blob/master/pkg/etcd/snapshot.go)
+     where `filepath.Join(snapshotsDir, restorePath)` doubles the prefix
+     for absolute `.zip` paths. The non-`.zip` branch of `Restore` uses
+     the path verbatim.
+   - on success: writes `/var/lib/rancher/k3s/.recovery-restored` as an
+     idempotency sentinel (subsequent cloud-init runs skip the restore),
+     then `systemctl enable k3s && systemctl start k3s`.
 5. `control-plane-02` and `control-plane-03` cloud-init wait on
    `https://<bootstrap-private-ip>:6443/healthz` then join as additional
    servers. Workers reconnect with the unchanged token from remote state.
