@@ -224,8 +224,9 @@ write_files:
           MC_FLAGS="--insecure"
 %{ endif ~}
 
-          mkdir -p /var/lib/rancher/k3s/server/db/snapshots
-          chmod 0700 /var/lib/rancher/k3s/server/db/snapshots
+          SNAPSHOTS_DIR=/var/lib/rancher/k3s/server/db/snapshots
+          mkdir -p "$SNAPSHOTS_DIR"
+          chmod 0700 "$SNAPSHOTS_DIR"
 
           log "Installing mc for S3 download"
           curl -fsSLo /usr/local/bin/mc https://dl.min.io/client/mc/release/linux-amd64/mc
@@ -243,16 +244,16 @@ write_files:
             "$ETCD_S3_ACCESS_KEY" "$ETCD_S3_SECRET_KEY" >>"$LOG" 2>&1
           /usr/local/bin/mc --config-dir "$MC_CONFIG_DIR" $MC_FLAGS cp \
             "restoresrc/$ETCD_S3_BUCKET/$ETCD_S3_FOLDER/$RESTORE_SNAPSHOT_NAME" \
-            /var/lib/rancher/k3s/server/db/snapshots/ >>"$LOG" 2>&1
+            "$SNAPSHOTS_DIR/" >>"$LOG" 2>&1
 
-          SNAP_LOCAL="/var/lib/rancher/k3s/server/db/snapshots/$RESTORE_SNAPSHOT_NAME"
+          SNAP_LOCAL="$SNAPSHOTS_DIR/$RESTORE_SNAPSHOT_NAME"
           if [ ! -s "$SNAP_LOCAL" ]; then
               log "ERROR: snapshot did not land at $SNAP_LOCAL"
               exit 1
           fi
           log "Snapshot present at $SNAP_LOCAL ($(stat -c %s "$SNAP_LOCAL") bytes)"
 
-          # Two k3s 1.35.x quirks to dodge:
+          # Three k3s 1.35.x quirks have to line up here:
           #
           # 1. config.yaml has `etcd-s3: true` so the regular service keeps
           #    shipping scheduled snapshots. k3s merges config.yaml into the
@@ -260,24 +261,31 @@ write_files:
           #    disable it for the one-shot run so we are not back on the S3
           #    code path we just bypassed by downloading locally.
           #
-          # 2. Pass the BASENAME, not the absolute path. k3s' restore loader
-          #    does filepath.Join(<datadir>/snapshots, restorePath), and Go's
-          #    filepath.Join does not treat an absolute second arg specially.
-          #    An absolute path becomes /var/lib/.../snapshots/var/lib/...
-          #    /snapshots/<file>: no such file or directory. The decompression
-          #    branch uses the absolute path correctly, but the loader does
-          #    not, and they disagree. Passing only the basename lets the
-          #    join produce the path that actually exists on disk. The
-          #    `$${VAR##*/}` parameter expansion below is defensive against
-          #    operators pasting a path-with-slashes or an `s3://...` URL.
+          # 2. Path resolution in --cluster-reset-restore-path is split across
+          #    two code paths in 1.35.x:
+          #    - An absolute path is passed through filepath.Join(snapshotsDir,
+          #      restorePath). Go's filepath.Join does not strip a leading
+          #      slash from the second arg, so the result is
+          #      /var/lib/.../snapshots/var/lib/.../snapshots/<file>: no such
+          #      file or directory. Observed in runs/26485441739.
+          #    - A basename is NOT joined with snapshotsDir; etcd then
+          #      stats the literal basename relative to k3s' CWD and
+          #      reports "etcd: snapshot path does not exist: <basename>".
+          #      Observed in runs/26487350265.
+          #    Reconcile both by passing the basename AND `cd`-ing to the
+          #    snapshots dir so the literal basename resolves to a real file
+          #    via CWD whichever code path k3s picks.
+          #
+          # 3. $${VAR##*/} defensively trims any directory prefix the operator
+          #    might have pasted (subfolder/x.zip, s3://... URL, abs path).
           SNAPSHOT_BASENAME="$${RESTORE_SNAPSHOT_NAME##*/}"
-          log "Running k3s --cluster-reset using basename $SNAPSHOT_BASENAME"
-          /usr/local/bin/k3s server \
-            --cluster-reset \
-            --cluster-reset-restore-path="$SNAPSHOT_BASENAME" \
-            --token "$K3S_TOKEN" \
-            --etcd-s3=false \
-            >>"$LOG" 2>&1
+          log "Running k3s --cluster-reset using basename $SNAPSHOT_BASENAME (cwd=$SNAPSHOTS_DIR)"
+          ( cd "$SNAPSHOTS_DIR" && /usr/local/bin/k3s server \
+              --cluster-reset \
+              --cluster-reset-restore-path="$SNAPSHOT_BASENAME" \
+              --token "$K3S_TOKEN" \
+              --etcd-s3=false \
+              >>"$LOG" 2>&1 )
 
           log "Cluster reset complete, starting k3s normally"
           systemctl start k3s
