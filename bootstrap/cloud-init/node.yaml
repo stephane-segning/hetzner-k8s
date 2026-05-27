@@ -267,11 +267,14 @@ write_files:
           #    /snapshots/<file>: no such file or directory. The decompression
           #    branch uses the absolute path correctly, but the loader does
           #    not, and they disagree. Passing only the basename lets the
-          #    join produce the path that actually exists on disk.
-          log "Running k3s --cluster-reset using basename $RESTORE_SNAPSHOT_NAME"
+          #    join produce the path that actually exists on disk. The
+          #    `$${VAR##*/}` parameter expansion below is defensive against
+          #    operators pasting a path-with-slashes or an `s3://...` URL.
+          SNAPSHOT_BASENAME="$${RESTORE_SNAPSHOT_NAME##*/}"
+          log "Running k3s --cluster-reset using basename $SNAPSHOT_BASENAME"
           /usr/local/bin/k3s server \
             --cluster-reset \
-            --cluster-reset-restore-path="$RESTORE_SNAPSHOT_NAME" \
+            --cluster-reset-restore-path="$SNAPSHOT_BASENAME" \
             --token "$K3S_TOKEN" \
             --etcd-s3=false \
             >>"$LOG" 2>&1
