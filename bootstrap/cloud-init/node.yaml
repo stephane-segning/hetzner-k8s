@@ -81,10 +81,13 @@ write_files:
           for attempt in $(seq 1 60); do
               # Pick the first link that is not loopback, not eth0/the public
               # NIC, and not a virtual interface (docker, cilium, veth, etc.).
+              # `|| true` keeps the retry loop alive when grep finds no match
+              # under `set -o pipefail` (the exact race this function exists
+              # to handle: NIC not yet attached on the first attempts).
               nic=$(ip -o link show 2>/dev/null \
                   | awk -F': ' '{print $2}' \
                   | awk -F'@' '{print $1}' \
-                  | grep -vE '^(lo|eth0|docker.*|cni.*|cilium.*|veth.*|kube-.*|flannel.*)$' \
+                  | { grep -vE '^(lo|eth0|docker.*|cni.*|cilium.*|veth.*|kube-.*|flannel.*)$' || true; } \
                   | head -1)
               [ -n "$nic" ] && break
               log "Waiting for private NIC to appear (attempt $attempt)"
@@ -202,8 +205,15 @@ write_files:
           ETCD_S3_ACCESS_KEY='${replace(etcd_s3_access_key_id, "'", "'\\''")}'
           ETCD_S3_SECRET_KEY='${replace(etcd_s3_secret_access_key, "'", "'\\''")}'
           ETCD_S3_BUCKET='${replace(etcd_s3_bucket, "'", "'\\''")}'
-          ETCD_S3_ENDPOINT='${replace(etcd_s3_endpoint, "'", "'\\''")}'
+          ETCD_S3_ENDPOINT_RAW='${replace(etcd_s3_endpoint, "'", "'\\''")}'
           ETCD_S3_FOLDER='${replace(etcd_s3_folder, "'", "'\\''")}'
+          RESTORE_SNAPSHOT_NAME='${replace(restore_snapshot_name, "'", "'\\''")}'
+
+          # The repo accepts ETCD_S3_ENDPOINT with or without scheme, but
+          # mc requires exactly one. Strip any leading scheme so we never
+          # produce "https://https://..." when the operator typed a URL.
+          ETCD_S3_ENDPOINT="$${ETCD_S3_ENDPOINT_RAW#http://}"
+          ETCD_S3_ENDPOINT="$${ETCD_S3_ENDPOINT#https://}"
 
           S3_SCHEME="https"
 %{ if etcd_s3_insecure ~}
@@ -221,28 +231,39 @@ write_files:
           curl -fsSLo /usr/local/bin/mc https://dl.min.io/client/mc/release/linux-amd64/mc
           chmod 0755 /usr/local/bin/mc
 
-          log "Downloading snapshot from $S3_SCHEME://$ETCD_S3_ENDPOINT/$ETCD_S3_BUCKET/$ETCD_S3_FOLDER/${restore_snapshot_name}"
-          /usr/local/bin/mc $MC_FLAGS alias set restoresrc \
+          # Use a per-run tempdir for mc config so credentials never persist
+          # in /root/.mc/config.json after cloud-init exits. The trap fires
+          # even if mc or k3s --cluster-reset aborts via `set -e`.
+          MC_CONFIG_DIR=$(mktemp -d)
+          trap 'rm -rf "$MC_CONFIG_DIR"' EXIT
+
+          log "Downloading snapshot from $S3_SCHEME://$ETCD_S3_ENDPOINT/$ETCD_S3_BUCKET/$ETCD_S3_FOLDER/$RESTORE_SNAPSHOT_NAME"
+          /usr/local/bin/mc --config-dir "$MC_CONFIG_DIR" $MC_FLAGS alias set restoresrc \
             "$S3_SCHEME://$ETCD_S3_ENDPOINT" \
             "$ETCD_S3_ACCESS_KEY" "$ETCD_S3_SECRET_KEY" >>"$LOG" 2>&1
-          /usr/local/bin/mc $MC_FLAGS cp \
-            "restoresrc/$ETCD_S3_BUCKET/$ETCD_S3_FOLDER/${restore_snapshot_name}" \
+          /usr/local/bin/mc --config-dir "$MC_CONFIG_DIR" $MC_FLAGS cp \
+            "restoresrc/$ETCD_S3_BUCKET/$ETCD_S3_FOLDER/$RESTORE_SNAPSHOT_NAME" \
             /var/lib/rancher/k3s/server/db/snapshots/ >>"$LOG" 2>&1
-          # Wipe mc credentials from disk
-          rm -rf /root/.mc
 
-          SNAP_LOCAL="/var/lib/rancher/k3s/server/db/snapshots/${restore_snapshot_name}"
+          SNAP_LOCAL="/var/lib/rancher/k3s/server/db/snapshots/$RESTORE_SNAPSHOT_NAME"
           if [ ! -s "$SNAP_LOCAL" ]; then
               log "ERROR: snapshot did not land at $SNAP_LOCAL"
               exit 1
           fi
           log "Snapshot present at $SNAP_LOCAL ($(stat -c %s "$SNAP_LOCAL") bytes)"
 
+          # The regular k3s service has etcd-s3 enabled in /etc/rancher/k3s/
+          # config.yaml so it keeps shipping scheduled snapshots to S3. k3s
+          # merges config.yaml into every server invocation, including this
+          # cluster-reset, which would re-trigger the 1.35.x doubled-path bug
+          # we sidestepped by downloading locally. Explicitly disable etcd-s3
+          # for the one-shot cluster-reset run.
           log "Running k3s --cluster-reset against local snapshot"
           /usr/local/bin/k3s server \
             --cluster-reset \
             --cluster-reset-restore-path="$SNAP_LOCAL" \
             --token "$K3S_TOKEN" \
+            --etcd-s3=false \
             >>"$LOG" 2>&1
 
           log "Cluster reset complete, starting k3s normally"
