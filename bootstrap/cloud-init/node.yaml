@@ -312,11 +312,24 @@ write_files:
           # merges config.yaml into every server invocation including this
           # cluster-reset; pass --etcd-s3=false to force-disable for the
           # one-shot run, otherwise k3s tries to re-fetch via S3.
+          #
+          # --node-ip / --advertise-address must be passed explicitly here
+          # too: the cluster-reset invocation is a SEPARATE process from
+          # the eventual systemd-managed k3s service, so it does NOT inherit
+          # the flags written into /etc/systemd/system/k3s.service by the
+          # install above. Without them, etcd picks the default-route
+          # interface (eth0, the public IP) for the peer URL it records in
+          # the restored member list, and the subsequent `systemctl start
+          # k3s` run with --node-ip=<private IP> rejects the mismatch with
+          # "this server is a not a member of the etcd cluster.
+          # Found [...=https://<public>:2380], expect ...=https://<private>:2380".
           log "Running k3s --cluster-reset against $SNAP_RESTORE"
           /usr/local/bin/k3s server \
             --cluster-reset \
             --cluster-reset-restore-path="$SNAP_RESTORE" \
             --token "$K3S_TOKEN" \
+            --node-ip "$NODE_PRIVATE_IP" \
+            --advertise-address "$NODE_PRIVATE_IP" \
             --etcd-s3=false \
             >>"$LOG" 2>&1
 
