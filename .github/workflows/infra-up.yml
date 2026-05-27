@@ -142,7 +142,31 @@ jobs:
         run: terraform -chdir="$TF_DIR" validate
 
       - name: Terraform plan
-        run: terraform -chdir="$TF_DIR" plan -out="$RUNNER_TEMP/tfplan"
+        env:
+          RESTORE_FROM_S3: ${{ inputs.restore_from_s3 && 'true' || 'false' }}
+        run: |
+          # When restoring from S3, the bootstrap control-plane is the only
+          # node that runs --cluster-reset --cluster-reset-restore-path. The
+          # other control planes must be re-provisioned so they boot with an
+          # empty /var/lib/rancher/k3s/server/db/ and join the restored cluster
+          # as fresh etcd members. Their user_data is byte-identical between
+          # restore and non-restore modes, so Terraform would not otherwise
+          # replace them; we force it here only during a restore run.
+          replace_args=()
+          if [ "$RESTORE_FROM_S3" = "true" ]; then
+            while IFS= read -r addr; do
+              [ -n "$addr" ] && replace_args+=("-replace=$addr")
+            done < <(
+              terraform -chdir="$TF_DIR" state list 2>/dev/null \
+                | grep -E '^module\.servers\.hcloud_server\.main\["control-plane-[0-9]+"\]$' \
+                | grep -v '"control-plane-01"' || true
+            )
+            {
+              echo "Forcing replacement of non-bootstrap control planes for S3 restore:"
+              printf '  - %s\n' "${replace_args[@]}"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          terraform -chdir="$TF_DIR" plan "${replace_args[@]}" -out="$RUNNER_TEMP/tfplan"
 
       - name: Guard control-plane replacements
         env:
