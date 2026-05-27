@@ -252,16 +252,29 @@ write_files:
           fi
           log "Snapshot present at $SNAP_LOCAL ($(stat -c %s "$SNAP_LOCAL") bytes)"
 
-          # The regular k3s service has etcd-s3 enabled in /etc/rancher/k3s/
-          # config.yaml so it keeps shipping scheduled snapshots to S3. k3s
-          # merges config.yaml into every server invocation, including this
-          # cluster-reset, which would re-trigger the 1.35.x doubled-path bug
-          # we sidestepped by downloading locally. Explicitly disable etcd-s3
-          # for the one-shot cluster-reset run.
-          log "Running k3s --cluster-reset against local snapshot"
+          # Two k3s 1.35.x quirks to dodge:
+          #
+          # 1. config.yaml has `etcd-s3: true` so the regular service keeps
+          #    shipping scheduled snapshots. k3s merges config.yaml into the
+          #    cluster-reset invocation too; pass --etcd-s3=false to force-
+          #    disable it for the one-shot run so we are not back on the S3
+          #    code path we just bypassed by downloading locally.
+          #
+          # 2. Pass the BASENAME, not the absolute path. k3s' restore loader
+          #    does filepath.Join(<datadir>/snapshots, restorePath), and Go's
+          #    filepath.Join does not treat an absolute second arg specially.
+          #    An absolute path becomes /var/lib/.../snapshots/var/lib/...
+          #    /snapshots/<file>: no such file or directory. The decompression
+          #    branch uses the absolute path correctly, but the loader does
+          #    not, and they disagree. Passing only the basename lets the
+          #    join produce the path that actually exists on disk. The
+          #    `$${VAR##*/}` parameter expansion below is defensive against
+          #    operators pasting a path-with-slashes or an `s3://...` URL.
+          SNAPSHOT_BASENAME="$${RESTORE_SNAPSHOT_NAME##*/}"
+          log "Running k3s --cluster-reset using basename $SNAPSHOT_BASENAME"
           /usr/local/bin/k3s server \
             --cluster-reset \
-            --cluster-reset-restore-path="$SNAP_LOCAL" \
+            --cluster-reset-restore-path="$SNAPSHOT_BASENAME" \
             --token "$K3S_TOKEN" \
             --etcd-s3=false \
             >>"$LOG" 2>&1
