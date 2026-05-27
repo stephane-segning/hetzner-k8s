@@ -57,21 +57,29 @@ using the unchanged `random_password.k3s_token` from remote Terraform state.
    The workflow's pre-flight step refuses to plan if any required ETCD_S3_*
    secret or snapshot name is missing, so the cluster will not boot into a
    broken half-restored state.
-3. `control-plane-01` cloud-init: installs k3s with `INSTALL_K3S_SKIP_START`,
+3. The workflow's `Terraform plan` step automatically passes
+   `-replace=module.servers.hcloud_server.main["control-plane-NN"]` for every
+   non-bootstrap control plane when `restore_from_s3=true`. This is required:
+   etcd is a single replicated store, so only `control-plane-01` runs
+   `--cluster-reset --cluster-reset-restore-path`. The other CPs must boot
+   fresh (empty `/var/lib/rancher/k3s/server/db/`) and join as new etcd
+   members, otherwise their stale member IDs would prevent quorum.
+4. `control-plane-01` cloud-init: installs k3s with `INSTALL_K3S_SKIP_START`,
    runs `k3s --cluster-reset --cluster-reset-restore-path=<filename>` with
    inline S3 credentials, then `systemctl start k3s`.
-4. `control-plane-02` and `control-plane-03` cloud-init wait on
+5. `control-plane-02` and `control-plane-03` cloud-init wait on
    `https://<bootstrap-private-ip>:6443/healthz` then join as additional
-   servers. Workers reconnect with the unchanged token.
-5. Trigger **Platform Up** in GH Actions to reconcile Cilium, Hetzner CCM/CSI,
+   servers. Workers reconnect with the unchanged token from remote state.
+6. Trigger **Platform Up** in GH Actions to reconcile Cilium, Hetzner CCM/CSI,
    Traefik, and to re-apply the `k3s-etcd-snapshot-s3-config` Secret in
    `kube-system` so that future scheduled snapshots resume against S3.
-6. Trigger **Verify Etcd Backups** in GH Actions to confirm a recent S3
+7. Trigger **Verify Etcd Backups** in GH Actions to confirm a recent S3
    snapshot is present. The just-restored snapshot itself counts; a fresh
    snapshot will land at the next `etcd_snapshot_schedule_cron` tick.
-7. Open a follow-up PR setting `restore_from_s3 = false` (and clearing
-   `restore_snapshot_name`) so the next routine Infra Up run does not attempt
-   to re-restore the same snapshot.
+8. For the next Infra Up run, leave `restore_from_s3 = false` (the default).
+   Subsequent runs will not touch the control planes because their user_data
+   is byte-identical between restore and non-restore modes; the `-replace`
+   flags above only fire when `restore_from_s3 = true`.
 
 ### What you lose
 
