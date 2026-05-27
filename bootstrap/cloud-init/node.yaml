@@ -249,6 +249,15 @@ write_files:
           MC_CONFIG_DIR=$(mktemp -d)
           trap 'rm -rf "$MC_CONFIG_DIR"' EXIT
 
+          # Refuse to proceed if the operator forgot to pass restore_snapshot_name
+          # while flipping restore_from_s3=true. The workflow already guards
+          # this in Validate restore inputs, but defending here too means a
+          # local Terraform apply (break-glass) can't silently no-op.
+          if [ -z "$RESTORE_SNAPSHOT_NAME" ]; then
+              log "ERROR: restore_from_s3 is true but restore_snapshot_name is empty"
+              exit 1
+          fi
+
           # Defensive basename: trim any directory prefix the operator may
           # have pasted (subfolder/x.zip, s3://... URL, absolute path).
           SNAPSHOT_BASENAME="$${RESTORE_SNAPSHOT_NAME##*/}"
@@ -262,8 +271,8 @@ write_files:
             "$SNAPSHOTS_DIR/" >>"$LOG" 2>&1
 
           SNAP_ZIP="$SNAPSHOTS_DIR/$SNAPSHOT_BASENAME"
-          if [ ! -s "$SNAP_ZIP" ]; then
-              log "ERROR: snapshot did not land at $SNAP_ZIP"
+          if [ ! -f "$SNAP_ZIP" ] || [ ! -s "$SNAP_ZIP" ]; then
+              log "ERROR: snapshot did not land as a non-empty file at $SNAP_ZIP"
               exit 1
           fi
           log "Snapshot present at $SNAP_ZIP ($(stat -c %s "$SNAP_ZIP") bytes)"
@@ -285,7 +294,7 @@ write_files:
           case "$SNAPSHOT_BASENAME" in
               *.zip)
                   log "Pre-decompressing $SNAPSHOT_BASENAME to dodge k3s 1.35.x decompressSnapshot path-join bug"
-                  ( cd "$SNAPSHOTS_DIR" && unzip -o "$SNAPSHOT_BASENAME" >>"$LOG" 2>&1 )
+                  unzip -o "$SNAP_ZIP" -d "$SNAPSHOTS_DIR" >>"$LOG" 2>&1
                   SNAP_RESTORE="$SNAPSHOTS_DIR/$${SNAPSHOT_BASENAME%.zip}"
                   ;;
               *)
@@ -293,8 +302,8 @@ write_files:
                   ;;
           esac
 
-          if [ ! -s "$SNAP_RESTORE" ]; then
-              log "ERROR: uncompressed snapshot not found at $SNAP_RESTORE"
+          if [ ! -f "$SNAP_RESTORE" ] || [ ! -s "$SNAP_RESTORE" ]; then
+              log "ERROR: uncompressed snapshot not a non-empty file at $SNAP_RESTORE"
               exit 1
           fi
           log "Uncompressed snapshot ready at $SNAP_RESTORE ($(stat -c %s "$SNAP_RESTORE") bytes)"
