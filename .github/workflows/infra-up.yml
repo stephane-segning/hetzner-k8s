@@ -147,49 +147,86 @@ jobs:
         run: |
           # When restoring from S3:
           #
-          #  - The non-bootstrap control planes must be re-provisioned so
-          #    they boot with empty /var/lib/rancher/k3s/server/db/ and
-          #    join as fresh etcd members of the restored cluster. Only
-          #    control-plane-01 actually runs --cluster-reset; the others
-          #    join. Their user_data is byte-identical between restore and
-          #    non-restore modes, so Terraform would not otherwise replace
-          #    them.
+          #  - On a FIRST restore (cluster API is NOT reachable), the
+          #    non-bootstrap control planes and the workers must all be
+          #    re-provisioned. The cps must boot with empty
+          #    /var/lib/rancher/k3s/server/db/ and join as fresh etcd members
+          #    of the restored cluster; workers may have a pinned CA hash
+          #    from a different cluster (e.g. an empty cluster created by a
+          #    prior failed restore) and need a fresh agent install against
+          #    the restored cluster's CA. Their user_data is byte-identical
+          #    between restore and non-restore modes, so Terraform would not
+          #    otherwise replace them.
           #
-          #  - The workers must also be re-provisioned. The restored cluster
-          #    uses the ORIGINAL Kubernetes cluster CA (the one baked into
-          #    the etcd snapshot), but any worker that ran k3s-agent against
-          #    a different cluster (e.g. the empty cluster created by a
-          #    prior failed restore attempt) has pinned the CA hash of that
-          #    other cluster in /var/lib/rancher/k3s/agent/. After restore,
-          #    those agents loop on "tls: failed to verify certificate:
-          #    x509: certificate signed by unknown authority". A fresh VM
-          #    bootstraps k3s-agent against the current API LB CA and joins
-          #    cleanly.
+          #  - On a RE-RUN against an already-restored cluster (API
+          #    reachable), the non-bootstrap CPs must NOT be replaced. The
+          #    sentinel /var/lib/rancher/k3s/.recovery-restored on cp-1
+          #    keeps cp-1 from redoing the cluster-reset; if we also tore
+          #    down cp-2 and cp-3, etcd would lose quorum (1 of 3 voters)
+          #    and never recover because adding new members itself requires
+          #    quorum. Only the workers should be touched, in case any of
+          #    them have stale CA from a prior empty-cluster era.
           #
-          # The sentinel /var/lib/rancher/k3s/.recovery-restored on
-          # control-plane-01 ensures that re-running Infra Up with
-          # restore_from_s3=true does NOT redo --cluster-reset on top of an
-          # already-restored cluster; cp-1 just starts k3s normally. So a
-          # second restore run after the workflow forces worker replacement
-          # will replace only the workers and leave the restored cluster
-          # intact.
+          # Reachability of the cluster API LB is our proxy for "is the
+          # cluster already restored": 200/401/403 means TLS handshake works
+          # and the API is up.
           replace_args=()
           if [ "$RESTORE_FROM_S3" = "true" ]; then
-            while IFS= read -r addr; do
-              [ -n "$addr" ] && replace_args+=("-replace=$addr")
-            done < <(
+            API_ENDPOINT=$(terraform -chdir="$TF_DIR" output -raw api_server_endpoint 2>/dev/null || true)
+            case "$API_ENDPOINT" in
+              http://*|https://*) ;;
+              *) [ -n "$API_ENDPOINT" ] && API_ENDPOINT="https://$API_ENDPOINT" ;;
+            esac
+
+            api_status="000"
+            if [ -n "$API_ENDPOINT" ]; then
+              api_status=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 5 "$API_ENDPOINT/livez" 2>/dev/null || echo "000")
+            fi
+            echo "Restore mode: API probe $API_ENDPOINT/livez -> HTTP $api_status"
+
+            cluster_reachable=false
+            case "$api_status" in
+              200|401|403) cluster_reachable=true ;;
+            esac
+
+            if [ "$cluster_reachable" = "true" ]; then
+              # Cluster is already restored and healthy. Only force-replace
+              # workers (their CA may be from a different cluster era);
+              # leave cp-2/cp-3 alone so etcd quorum stays intact.
+              while IFS= read -r addr; do
+                [ -n "$addr" ] && replace_args+=("-replace=$addr")
+              done < <(
+                terraform -chdir="$TF_DIR" state list 2>/dev/null \
+                  | grep -E '^module\.servers\.hcloud_server\.main\["worker-[0-9]+"\]$' \
+                  || true
+              )
               {
-                terraform -chdir="$TF_DIR" state list 2>/dev/null \
-                  | grep -E '^module\.servers\.hcloud_server\.main\["control-plane-[0-9]+"\]$' \
-                  | grep -v '"control-plane-01"'
-                terraform -chdir="$TF_DIR" state list 2>/dev/null \
-                  | grep -E '^module\.servers\.hcloud_server\.main\["worker-[0-9]+"\]$'
-              } || true
-            )
-            {
-              echo "Forcing replacement of non-bootstrap control planes and workers for S3 restore:"
-              printf '  - %s\n' "${replace_args[@]}"
-            } >> "$GITHUB_STEP_SUMMARY"
+                echo "Cluster API is reachable; restoring already complete."
+                echo "Force-replacing workers only (sparing cp-2/cp-3 to preserve etcd quorum):"
+                printf '  - %s\n' "${replace_args[@]}"
+              } >> "$GITHUB_STEP_SUMMARY"
+            else
+              # Cluster API is not reachable. Treat as first restore: replace
+              # non-bootstrap CPs (to wipe stale etcd data) and workers (to
+              # wipe stale CA pinning). cp-1 itself gets replaced if its
+              # user_data changed (the restore branch in cloud-init).
+              while IFS= read -r addr; do
+                [ -n "$addr" ] && replace_args+=("-replace=$addr")
+              done < <(
+                {
+                  terraform -chdir="$TF_DIR" state list 2>/dev/null \
+                    | grep -E '^module\.servers\.hcloud_server\.main\["control-plane-[0-9]+"\]$' \
+                    | grep -v '"control-plane-01"'
+                  terraform -chdir="$TF_DIR" state list 2>/dev/null \
+                    | grep -E '^module\.servers\.hcloud_server\.main\["worker-[0-9]+"\]$'
+                } || true
+              )
+              {
+                echo "Cluster API not reachable (status $api_status); treating as first restore."
+                echo "Force-replacing non-bootstrap control planes and all workers:"
+                printf '  - %s\n' "${replace_args[@]}"
+              } >> "$GITHUB_STEP_SUMMARY"
+            fi
           fi
           terraform -chdir="$TF_DIR" plan "${replace_args[@]}" -out="$RUNNER_TEMP/tfplan"
 
