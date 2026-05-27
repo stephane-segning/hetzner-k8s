@@ -116,26 +116,22 @@ write_files:
 
           # The in-cluster k3s-etcd-snapshot-s3-config Secret is not available
           # during restore (it lives in the etcd we are restoring), so pass S3
-          # settings inline via a 0600 env file to keep credentials out of `ps`.
-          # Values are wrapped in single quotes so $, spaces, or other shell
-          # metacharacters in credentials do not break `.` sourcing. The trap
-          # guarantees the file is shredded even if --cluster-reset fails and
-          # the script exits via `set -e`.
-          trap 'shred -u /root/etcd-restore.env 2>/dev/null || rm -f /root/etcd-restore.env' EXIT
-          OLD_UMASK=$(umask)
-          umask 077
-          cat > /root/etcd-restore.env <<'EOF'
-ETCD_S3_ACCESS_KEY='${replace(etcd_s3_access_key_id, "'", "'\\''")}'
-ETCD_S3_SECRET_KEY='${replace(etcd_s3_secret_access_key, "'", "'\\''")}'
-ETCD_S3_BUCKET='${replace(etcd_s3_bucket, "'", "'\\''")}'
-ETCD_S3_ENDPOINT='${replace(etcd_s3_endpoint, "'", "'\\''")}'
-ETCD_S3_REGION='${replace(etcd_s3_region, "'", "'\\''")}'
-ETCD_S3_FOLDER='${replace(etcd_s3_folder, "'", "'\\''")}'
-ETCD_S3_BUCKET_LOOKUP_TYPE='${replace(etcd_s3_bucket_lookup_type, "'", "'\\''")}'
-EOF
-          umask "$OLD_UMASK"
-          # shellcheck disable=SC1091
-          . /root/etcd-restore.env
+          # settings inline as shell variables. We cannot use a heredoc env
+          # file here: the heredoc body must not be indented (or bash never
+          # finds the closing EOF), but cloud-init parses this whole script as
+          # a YAML literal-block scalar that requires every line to share the
+          # parent's indent, and the YAML parser rejects de-indented lines.
+          # Inline shell assignments avoid the conflict. Single quotes plus
+          # the canonical '\'' escape keep arbitrary credentials intact, and
+          # k3s takes these values as CLI flags below, so a 0600 file would
+          # not have hidden them from `ps` anyway.
+          ETCD_S3_ACCESS_KEY='${replace(etcd_s3_access_key_id, "'", "'\\''")}'
+          ETCD_S3_SECRET_KEY='${replace(etcd_s3_secret_access_key, "'", "'\\''")}'
+          ETCD_S3_BUCKET='${replace(etcd_s3_bucket, "'", "'\\''")}'
+          ETCD_S3_ENDPOINT='${replace(etcd_s3_endpoint, "'", "'\\''")}'
+          ETCD_S3_REGION='${replace(etcd_s3_region, "'", "'\\''")}'
+          ETCD_S3_FOLDER='${replace(etcd_s3_folder, "'", "'\\''")}'
+          ETCD_S3_BUCKET_LOOKUP_TYPE='${replace(etcd_s3_bucket_lookup_type, "'", "'\\''")}'
 
           log "Running k3s --cluster-reset --cluster-reset-restore-path"
           /usr/local/bin/k3s server \
@@ -237,7 +233,7 @@ EOF
       fi
       
       log "k3s bootstrap complete"
-    permissions: '0755'
+    permissions: '0700'
 
   - path: /etc/systemd/system/k3s-bootstrap.service
     content: |
