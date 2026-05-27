@@ -57,13 +57,20 @@ using the unchanged `random_password.k3s_token` from remote Terraform state.
    The workflow's pre-flight step refuses to plan if any required ETCD_S3_*
    secret or snapshot name is missing, so the cluster will not boot into a
    broken half-restored state.
-3. The workflow's `Terraform plan` step automatically passes
-   `-replace=module.servers.hcloud_server.main["control-plane-NN"]` for every
-   non-bootstrap control plane when `restore_from_s3=true`. This is required:
-   etcd is a single replicated store, so only `control-plane-01` runs
-   `--cluster-reset --cluster-reset-restore-path`. The other CPs must boot
-   fresh (empty `/var/lib/rancher/k3s/server/db/`) and join as new etcd
-   members, otherwise their stale member IDs would prevent quorum.
+3. The workflow's `Terraform plan` step automatically passes `-replace=...`
+   for every non-bootstrap control plane **and** every worker when
+   `restore_from_s3=true`. This is required:
+   - etcd is a single replicated store, so only `control-plane-01` runs
+     `--cluster-reset --cluster-reset-restore-path`. The other CPs must boot
+     fresh (empty `/var/lib/rancher/k3s/server/db/`) and join as new etcd
+     members, otherwise their stale member IDs would prevent quorum.
+   - Workers that previously joined a different cluster (e.g. the empty
+     cluster created by a prior failed restore) have the OLD cluster's CA
+     hash pinned in `/var/lib/rancher/k3s/agent/`. After restore, the API
+     LB serves certs signed by the snapshot's ORIGINAL CA, and the pinned
+     hash rejects them with `x509: certificate signed by unknown
+     authority`. A fresh worker VM bootstraps k3s-agent against the
+     current CA and joins cleanly.
 4. `control-plane-01` cloud-init:
    - installs k3s with `INSTALL_K3S_SKIP_START=true` **and**
      `INSTALL_K3S_SKIP_ENABLE=true` so a partial failure cannot be
