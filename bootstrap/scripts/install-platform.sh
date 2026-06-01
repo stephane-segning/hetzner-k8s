@@ -177,6 +177,21 @@ EOF
     kubectl get secret "${secret_name}" -n kube-system >/dev/null
 }
 
+label_loadbalancer_nodes() {
+    # Exclude control-plane nodes from external LoadBalancer target pools so the
+    # Hetzner CCM only registers workers as LB targets. Two reasons:
+    #   1. Control planes should run cluster operators, not serve ingress traffic.
+    #   2. A single bad CP target (e.g. a recreated node with a stale providerID)
+    #      makes the CCM fail the ENTIRE LB sync — the LB never gets an address.
+    # This MUST be a post-bootstrap `kubectl label` (admin credential): kubelet
+    # cannot self-apply `node.kubernetes.io/*` labels (NodeRestriction), so it
+    # cannot go through k3s `--node-label`. Run before CCM/Traefik so the first
+    # LB reconcile already targets workers only. Idempotent.
+    log "Excluding control-plane nodes from external load balancers (workers-only LB targets)"
+    kubectl label nodes -l node-role.kubernetes.io/control-plane \
+        node.kubernetes.io/exclude-from-external-load-balancers="" --overwrite
+}
+
 install_ccm_and_csi() {
     log "Installing Hetzner CCM and CSI via official Helm charts"
 
@@ -243,6 +258,7 @@ main() {
     ensure_prerequisites
     resolve_hetzner_inputs
     apply_namespaces
+    label_loadbalancer_nodes
     install_cilium
     apply_hetzner_secrets
     apply_etcd_snapshot_s3_secret

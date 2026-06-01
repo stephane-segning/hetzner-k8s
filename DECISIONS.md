@@ -160,6 +160,19 @@ This document records key decisions made during the design of this platform.
 
 - Rejected: No HA, requires external LB or DNS failover
 
+**LB targets: workers only**
+
+- Control-plane nodes are labelled `node.kubernetes.io/exclude-from-external-load-balancers`
+  so the Hetzner CCM registers only workers as LB targets.
+- Rationale: control planes run cluster operators, not ingress traffic; and a
+  single unhealthy CP target (e.g. a recreated node whose `providerID` is stale)
+  causes the CCM to fail the *entire* LoadBalancer sync, leaving the Service
+  with no address. Excluding CPs removes that failure mode.
+- Applied by `bootstrap/scripts/install-platform.sh` (`label_loadbalancer_nodes`,
+  before CCM/Traefik install). It must be a post-bootstrap `kubectl label` with
+  an admin credential, because kubelet cannot self-apply `node.kubernetes.io/*`
+  labels (NodeRestriction), so k3s `--node-label` cannot carry it.
+
 ### Kubernetes API Endpoint: Dedicated Terraform-managed LB
 
 **Decision**: Use a dedicated Terraform-managed Hetzner TCP load balancer for `:6443`
