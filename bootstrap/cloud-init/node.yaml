@@ -152,7 +152,7 @@ write_files:
           exit 0
       fi
 
-      # Pre-seed a DETERMINISTIC node password.
+      # Pre-seed a STABLE per-node password from Terraform state.
       #
       # k3s stores hash(node-password) in a kube-system Secret
       # <nodename>.node-password.k3s on a node's first join, and rejects
@@ -160,27 +160,25 @@ write_files:
       # password is random and written to /etc/rancher/node/password on
       # first start. That means a node that loses its disk (Terraform
       # -replace), or whose stored Secret comes from a different era (an
-      # etcd restore re-introducing an older Secret), presents a password
-      # that no longer matches and is rejected with:
+      # etcd restore re-introducing an older Secret), presents a fresh
+      # random password that no longer matches and is rejected with:
       #   "Node password rejected, duplicate hostname or contents of
       #    '/etc/rancher/node/password' may not match server node-passwd entry"
-      # which leaves the node NotReady (kubelet can't retrieve its config).
+      # leaving the node NotReady (kubelet can't retrieve its config).
       #
-      # We derive the password deterministically from the cluster token and
-      # the node name (which equals the hostname k3s uses). The cluster
-      # token is stable in Terraform state across reboots, replaces, and
-      # restores, so the same node name always presents the same password
-      # and always matches the stored Secret. This adds no real exposure:
-      # anyone holding the cluster token can already join as any node, so
-      # the node password is not an independent security boundary here.
-      # See ADR-0012.
-      if [ ! -s /etc/rancher/node/password ]; then
-          NODE_PASSWORD="$(printf '%s' "$K3S_TOKEN:$(hostname)" | sha256sum | cut -d' ' -f1)"
-          mkdir -p /etc/rancher/node
-          printf '%s\n' "$NODE_PASSWORD" > /etc/rancher/node/password
-          chmod 0600 /etc/rancher/node/password
-          log "Pre-seeded deterministic node password for $(hostname)"
-      fi
+      # We instead write a per-node password generated and held in Terraform
+      # state (random_password.node_password[<key>]). Terraform state is
+      # stable across reboots, replaces, and restores, so a given node
+      # always presents the same password and always matches the stored
+      # Secret. It is per-node and independent of the shared k3s join token,
+      # so a leaked join token does not by itself let an attacker compute
+      # another node's identity password. We reach this point only when
+      # k3s is not yet active (early-exit above), so an unconditional write
+      # is correct and avoids a stale-file mismatch. See ADR-0012.
+      mkdir -p /etc/rancher/node
+      printf '%s\n' "${node_password}" > /etc/rancher/node/password
+      chmod 0600 /etc/rancher/node/password
+      log "Pre-seeded per-node password for $(hostname)"
 
       if [ "$INSTALL_K3S_VERSION" != "latest" ]; then
           export INSTALL_K3S_VERSION

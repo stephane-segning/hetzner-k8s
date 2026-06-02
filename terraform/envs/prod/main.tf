@@ -4,6 +4,27 @@ resource "random_password" "k3s_token" {
   override_special = "_-"
 }
 
+# Per-node k3s node password. k3s stores hash(node-password) in a
+# kube-system Secret <nodename>.node-password.k3s on first join and rejects
+# later joins that don't match. Keeping a stable per-node value in Terraform
+# state (rather than the random value k3s generates on disk at first boot)
+# means a reboot, a `-replace`, or an etcd restore always presents the same
+# password and matches the stored Secret. It is per-node (not derived from
+# the shared k3s join token) so a leaked join token does not by itself let
+# an attacker compute another node's identity password. See ADR-0012.
+# Keyed off the deterministic node keys derived from the counts, NOT off
+# local.nodes — local.nodes' user_data references this resource, so keying
+# on it would create a dependency cycle.
+resource "random_password" "node_password" {
+  for_each = toset(concat(
+    [for i in range(var.control_plane_count) : format("control-plane-%02d", i + 1)],
+    [for i in range(var.worker_count) : format("worker-%02d", i + 1)],
+  ))
+
+  length  = 32
+  special = false
+}
+
 module "network" {
   source = "../../modules/network"
 

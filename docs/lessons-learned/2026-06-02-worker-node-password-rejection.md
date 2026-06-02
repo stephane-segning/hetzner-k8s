@@ -68,15 +68,30 @@ would re-seed Secrets from a real value rather than mint empty ones.
 
 ## Prevention
 
-[ADR-0012](../adr/0012-deterministic-node-password.md): cloud-init now
-pre-seeds a **deterministic** `/etc/rancher/node/password` derived from the
-stable cluster token + hostname. Every reprovision of a node name presents
-the same password, matching the stored Secret through reboot, `-replace`,
-and etcd restore. The break-glass deletion above is documented in
-`docs/recovery.md` for any residual mismatch.
+[ADR-0012](../adr/0012-deterministic-node-password.md): Terraform now holds
+a **stable per-node password** (`random_password.node_password`) and
+cloud-init writes it to `/etc/rancher/node/password` at first boot. Because
+Terraform state survives reboot, `-replace`, and etcd restore, a given node
+always presents the same password and matches the stored Secret.
 
-A one-time Secret sweep is needed for nodes provisioned before ADR-0012
-(roadmap item N-5).
+> The first cut of this fix derived the password from `hash(k3s_token +
+> hostname)`. PR review (codex) correctly flagged that this collapses a
+> security boundary — a leaked join token would let anyone compute any
+> node's identity password — and that `$(hostname)` is fragile. The
+> per-node Terraform secret avoids both: it is independent of the join
+> token and needs no hostname normalization. See ADR-0012 § Options.
+
+Rolling a cloud-init change out is itself gated by
+[ADR-0013](../adr/0013-ignore-user-data-changes.md): `user_data` is
+`ForceNew`, so without `ignore_changes = [user_data]` this very change
+would have made the next routine Infra Up plan to replace all servers and
+fail at the CP-replacement guard. cloud-init changes now roll out via
+deliberate `-replace`; the restore flow `-replace`s the bootstrap CP
+explicitly.
+
+Existing nodes need no proactive migration (roadmap item N-5): their
+old random on-disk password and Secret are mutually consistent, and they
+adopt the Terraform password on their next `-replace`.
 
 ## Lessons
 
@@ -87,9 +102,14 @@ A one-time Secret sweep is needed for nodes provisioned before ADR-0012
   cp peer-URL mismatch (ADR-0011), and now node-password (ADR-0012) are
   all "joining-node state must match cluster identity, which our
   reprovision/restore operations invalidate." The general defense is:
-  derive joining-node identity deterministically from state that survives
-  those operations (the cluster token), rather than from per-VM random
-  values.
+  derive joining-node identity from state that survives those operations
+  (Terraform state) rather than from per-VM random values — but keep it
+  *per-node* and independent of the shared join token, not derived from it.
+- **A fix to a `ForceNew` cloud-init attribute has a deployment cost.**
+  Changing `user_data` wants to replace every node; that interacts with
+  the CP-replacement guard and etcd quorum. The fix needs an
+  `ignore_changes` + deliberate-`-replace` story (ADR-0013), or it can't
+  ship through the supported path.
 - **The stale `EXTERNAL-IP` column is a red herring.** `kubectl get no -o
   wide` showed workers with CP public IPs — that was Hetzner CCM's cached
   address mapping not yet reconciled after the reboots, not the problem.

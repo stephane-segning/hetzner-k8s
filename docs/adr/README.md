@@ -23,7 +23,8 @@ including the painful ones learned the hard way.
 | 0009  | [Use `mc` for inline S3 snapshot download during restore](0009-mc-for-inline-s3-download-during-restore.md) | Accepted |
 | 0010  | [Override `etcd-s3=false` on the cluster-reset CLI](0010-etcd-s3-false-on-cluster-reset.md) | Accepted |
 | 0011  | [Pass `--node-ip` and `--advertise-address` to cluster-reset](0011-node-ip-on-cluster-reset.md) | Accepted |
-| 0012  | [Deterministic node password to survive reboot/replace/restore](0012-deterministic-node-password.md) | Accepted |
+| 0012  | [Stable per-node password to survive reboot/replace/restore](0012-deterministic-node-password.md) | Accepted |
+| 0013  | [Ignore `user_data` drift; roll cloud-init out via `-replace`](0013-ignore-user-data-changes.md) | Accepted |
 
 ## Template
 

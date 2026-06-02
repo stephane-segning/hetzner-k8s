@@ -175,11 +175,16 @@ re-register. Non-destructive; node-password is only a join-time
 anti-spoofing token, not workload data:
 
 ```bash
-# From any control plane (or with a working kubeconfig):
-for n in worker-1 worker-2 worker-3; do
-  kubectl -n kube-system delete secret "ssegning-hetzner-k3s-$n.node-password.k3s"
+# From any control plane (or with a working kubeconfig).
+# Delete the Secret for EACH affected node — this can hit control planes
+# (k3s server) as well as workers (k3s-agent), so include whichever nodes
+# show "Node password rejected". Listing all six is safe; only mismatched
+# nodes recreate their Secret.
+for n in cp-1 cp-2 cp-3 worker-1 worker-2 worker-3; do
+  kubectl -n kube-system delete secret "ssegning-hetzner-k3s-$n.node-password.k3s" --ignore-not-found
 done
-# The k3s-agents are already in a ~7s retry loop; nodes go Ready within ~30s.
+# The k3s / k3s-agent services are already in a ~7s retry loop; nodes go
+# Ready within ~30s.
 kubectl get nodes -w
 ```
 

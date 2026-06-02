@@ -85,33 +85,48 @@ If the home Argo CD is also Argo-CD-of-itself, watch for it to
 self-sync. If not, manually trigger a hard refresh of the
 `ssegning-hetzner-k3s` cluster registration.
 
-### N-5 — One-time node-password Secret migration after ADR-0012
+### N-5 — Migrate existing nodes to the Terraform-held node password (optional)
 
-**P1.** ADR-0012 makes cloud-init pre-seed a *deterministic* node
-password. Nodes provisioned **before** that change still have
-`<nodename>.node-password.k3s` Secrets created from their old random
-passwords. The first time such a node reboots/replaces after the change
-ships, it will present the new deterministic password and be rejected
-until its Secret is cleared once.
+**P2.** ADR-0012 has Terraform hold a stable per-node password and
+cloud-init write it at first boot. Nodes provisioned **before** that
+change keep their original random on-disk password and a matching
+`<nodename>.node-password.k3s` Secret — the two are mutually consistent,
+so those nodes stay healthy through reboots and need **no** action. They
+adopt the Terraform-held password automatically the next time they are
+`-replace`d (the deliberate, recovery-grade path; with ADR-0013 a plain
+edit never replaces them).
 
-Migrate proactively (one-liner from any control plane), so no node gets
-caught NotReady later:
+So no migration is *required*. There are two ways to converge sooner if
+desired:
 
-```bash
-for n in cp-1 cp-2 cp-3 worker-1 worker-2 worker-3; do
-  kubectl -n kube-system delete secret "ssegning-hetzner-k3s-$n.node-password.k3s" --ignore-not-found
-done
-```
+1. **Lazy (recommended): do nothing.** Let each node adopt the new
+   password on its next deliberate `-replace`. Until then it runs happily
+   on its current consistent on-disk/Secret pair.
+2. **Eager:** for a specific node, write its Terraform-held password to
+   disk and re-register, in one shot, e.g.:
+   ```bash
+   # value from: terraform output (add an output) or state; node-side:
+   printf '%s\n' "<node_password from TF state for this node>" \
+     > /etc/rancher/node/password && chmod 0600 /etc/rancher/node/password
+   # then on a control plane, clear the stale Secret so it is recreated:
+   kubectl -n kube-system delete secret "ssegning-hetzner-k3s-<node>.node-password.k3s"
+   systemctl restart k3s   # or k3s-agent on a worker
+   ```
+   Only worth it if you want determinism before the node is otherwise
+   replaced. References: ADR-0012, ADR-0013, D-4 (closed).
 
-Each node's running k3s recreates its Secret from the (now deterministic,
-once cloud-init has re-run) or current on-disk password. Safe;
-node-password is not workload data. After this, reboot/replace/restore
-never hit the mismatch again. References: ADR-0012, D-4 (closed).
+> **Do NOT** just delete the Secret on a running pre-ADR-0012 node and
+> stop there: the running node immediately recreates the Secret from its
+> *current old random* on-disk password, so a later `-replace` (fresh
+> disk → Terraform password) would still mismatch. The eager path above
+> writes the disk password first; the lazy path avoids the issue entirely
+> because `-replace` starts from the Terraform password and a Secret that
+> was either cleared or never existed for that fresh identity.
 
 > **Note.** The 2026-06-02 incident (all three workers NotReady after a
-> reboot) was this exact failure, remediated live by deleting the worker
-> Secrets. The deterministic-password change prevents recurrence; this
-> item is the proactive sweep for the remaining (control-plane) Secrets.
+> reboot) was this failure family, remediated live by deleting the worker
+> Secrets (which was correct *there* because the goal was to re-pin the
+> nodes' then-current on-disk passwords). ADR-0012 prevents recurrence.
 
 ---
 

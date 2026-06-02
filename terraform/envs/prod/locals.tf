@@ -69,6 +69,7 @@ locals {
         k3s_role           = "control-plane"
         initialize_cluster = index == 0
         node_private_ip    = cidrhost(module.network.subnet_ip_range, 10 + index)
+        node_password      = random_password.node_password[format("control-plane-%02d", index + 1)].result
       }))
       labels = {
         node_pool = "control-plane"
@@ -86,6 +87,7 @@ locals {
         k3s_role           = "worker"
         initialize_cluster = false
         node_private_ip    = cidrhost(module.network.subnet_ip_range, 20 + index)
+        node_password      = random_password.node_password[format("worker-%02d", index + 1)].result
       }))
       labels = {
         node_pool = "worker"

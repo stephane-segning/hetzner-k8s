@@ -68,6 +68,17 @@ branch. All other CPs and workers wait on cp-1's `/healthz` then join.
 rendered per-node. The same file produces all three role variants
 (bootstrap CP, joining CP, worker) via `%{ if ... }%{ endif }` directives.
 
+**Deployment model.** `user_data` is `ForceNew` on `hcloud_server`, but the
+server resource sets `ignore_changes = [user_data]` (ADR-0013). So editing
+this file does **not** retroactively change live nodes and does not show as
+drift on a routine Infra Up. cloud-init only runs at first boot; a changed
+template reaches a node only when that node is deliberately recreated with
+`terraform apply -replace=<node>` (workers freely; control planes one at a
+time to preserve etcd quorum; the restore flow `-replace`s the bootstrap CP
+itself). Each node also gets a stable per-node password
+(`random_password.node_password`) written to `/etc/rancher/node/password`
+before k3s installs (ADR-0012).
+
 ```mermaid
 flowchart TB
     start[/Start: k3s-bootstrap.service/]
