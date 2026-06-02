@@ -144,6 +144,50 @@ your threat model requires it, and re-run Platform Up to update the
 
 ## Node Recovery
 
+### Node `NotReady` after reboot / replace / restore — node-password rejected
+
+**Symptom.** One or more nodes are `NotReady` with
+`Kubelet stopped posting node status`. On the node, `journalctl -u k3s-agent`
+(workers) or `journalctl -u k3s` (servers) shows:
+
+```
+Node password rejected, duplicate hostname or contents of
+'/etc/rancher/node/password' may not match server node-passwd entry,
+try enabling a unique node name with the --with-node-id flag
+```
+
+**Cause.** k3s stores `hash(node-password)` in a `kube-system` Secret
+`<nodename>.node-password.k3s` and rejects a join whose presented password
+doesn't match. The on-disk `/etc/rancher/node/password` and the stored
+Secret drifted apart — typically because the node was re-provisioned
+(fresh disk → new password), or an etcd restore re-introduced an
+older-era Secret. See [ADR-0012](adr/0012-deterministic-node-password.md).
+
+**Permanent fix** (already in the codebase as of ADR-0012): cloud-init
+pre-seeds a deterministic `/etc/rancher/node/password` derived from the
+cluster token + hostname, so every (re)provision of a node name presents
+the same password and matches the stored Secret. New nodes are correct
+automatically.
+
+**Break-glass remediation** (for nodes provisioned before ADR-0012, or any
+residual mismatch) — delete the stale Secret(s) and let the agent
+re-register. Non-destructive; node-password is only a join-time
+anti-spoofing token, not workload data:
+
+```bash
+# From any control plane (or with a working kubeconfig):
+for n in worker-1 worker-2 worker-3; do
+  kubectl -n kube-system delete secret "ssegning-hetzner-k3s-$n.node-password.k3s"
+done
+# The k3s-agents are already in a ~7s retry loop; nodes go Ready within ~30s.
+kubectl get nodes -w
+```
+
+Confirm the node's on-disk password is present first
+(`ssh root@<node> 'test -s /etc/rancher/node/password && echo ok'`); if it
+is missing, the node will mint a fresh one on next start and the deleted
+Secret will be recreated from it.
+
 ### Single Node Failure
 
 If a single node fails:

@@ -85,6 +85,34 @@ If the home Argo CD is also Argo-CD-of-itself, watch for it to
 self-sync. If not, manually trigger a hard refresh of the
 `ssegning-hetzner-k3s` cluster registration.
 
+### N-5 — One-time node-password Secret migration after ADR-0012
+
+**P1.** ADR-0012 makes cloud-init pre-seed a *deterministic* node
+password. Nodes provisioned **before** that change still have
+`<nodename>.node-password.k3s` Secrets created from their old random
+passwords. The first time such a node reboots/replaces after the change
+ships, it will present the new deterministic password and be rejected
+until its Secret is cleared once.
+
+Migrate proactively (one-liner from any control plane), so no node gets
+caught NotReady later:
+
+```bash
+for n in cp-1 cp-2 cp-3 worker-1 worker-2 worker-3; do
+  kubectl -n kube-system delete secret "ssegning-hetzner-k3s-$n.node-password.k3s" --ignore-not-found
+done
+```
+
+Each node's running k3s recreates its Secret from the (now deterministic,
+once cloud-init has re-run) or current on-disk password. Safe;
+node-password is not workload data. After this, reboot/replace/restore
+never hit the mismatch again. References: ADR-0012, D-4 (closed).
+
+> **Note.** The 2026-06-02 incident (all three workers NotReady after a
+> reboot) was this exact failure, remediated live by deleting the worker
+> Secrets. The deterministic-password change prevents recurrence; this
+> item is the proactive sweep for the remaining (control-plane) Secrets.
+
 ---
 
 ## Next — next 1-3 months

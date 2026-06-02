@@ -152,6 +152,36 @@ write_files:
           exit 0
       fi
 
+      # Pre-seed a DETERMINISTIC node password.
+      #
+      # k3s stores hash(node-password) in a kube-system Secret
+      # <nodename>.node-password.k3s on a node's first join, and rejects
+      # later joins whose presented password doesn't match. By default the
+      # password is random and written to /etc/rancher/node/password on
+      # first start. That means a node that loses its disk (Terraform
+      # -replace), or whose stored Secret comes from a different era (an
+      # etcd restore re-introducing an older Secret), presents a password
+      # that no longer matches and is rejected with:
+      #   "Node password rejected, duplicate hostname or contents of
+      #    '/etc/rancher/node/password' may not match server node-passwd entry"
+      # which leaves the node NotReady (kubelet can't retrieve its config).
+      #
+      # We derive the password deterministically from the cluster token and
+      # the node name (which equals the hostname k3s uses). The cluster
+      # token is stable in Terraform state across reboots, replaces, and
+      # restores, so the same node name always presents the same password
+      # and always matches the stored Secret. This adds no real exposure:
+      # anyone holding the cluster token can already join as any node, so
+      # the node password is not an independent security boundary here.
+      # See ADR-0012.
+      if [ ! -s /etc/rancher/node/password ]; then
+          NODE_PASSWORD="$(printf '%s' "$K3S_TOKEN:$(hostname)" | sha256sum | cut -d' ' -f1)"
+          mkdir -p /etc/rancher/node
+          printf '%s\n' "$NODE_PASSWORD" > /etc/rancher/node/password
+          chmod 0600 /etc/rancher/node/password
+          log "Pre-seeded deterministic node password for $(hostname)"
+      fi
+
       if [ "$INSTALL_K3S_VERSION" != "latest" ]; then
           export INSTALL_K3S_VERSION
       fi
