@@ -1,29 +1,30 @@
 # 12. Glossary
 
-| Term                                  | Meaning                                                                                                       |
-|---------------------------------------|---------------------------------------------------------------------------------------------------------------|
-| **Argo CD (home cluster)**            | GitOps controller running in a separate, operator-owned cluster; manages this cluster's workloads from Git.   |
-| **bootstrap CP**                      | `control-plane-01` — the only CP that runs `--cluster-init` (fresh) or `--cluster-reset` (restore). Index 0.  |
-| **CCM**                               | Cloud Controller Manager. Hetzner CCM sets node `ProviderID`s and provisions Hetzner LBs for `Service.type=LoadBalancer`. |
-| **CCM-managed LB**                    | A Hetzner Load Balancer created from a Kubernetes `Service` annotation by Hetzner CCM. Used for the Traefik ingress LB. |
-| **CNI**                               | Container Network Interface plugin. This cluster uses Cilium with `--flannel-backend=none --disable-network-policy`. |
-| **cluster-reset**                     | The k3s flag `--cluster-reset` (with optional `--cluster-reset-restore-path`) that forgets all etcd peers and either initializes a new cluster of one or restores from a snapshot. |
-| **cloud-init template**               | `bootstrap/cloud-init/node.yaml` — single Terraform `templatefile` rendered per-node, role-conditional.       |
-| **CSI**                               | Container Storage Interface driver. Hetzner CSI provisions Hetzner block volumes for PVCs.                    |
-| **decompressSnapshot bug**            | k3s `v1.35.3+k3s1` bug in `pkg/etcd/snapshot.go` where `filepath.Join(snapshotDir, absPath)` doubles the prefix for `.zip` paths. See ADR-0003. |
-| **etcd-s3**                           | k3s' built-in mechanism for uploading scheduled etcd snapshots to S3 and (in normal operation) downloading them for restore. |
-| **GH Actions secret**                 | Encrypted variable scoped to the `production` GitHub Environment, exposed to workflows via `secrets.X` in expressions. |
-| **HCLOUD_TOKEN**                      | Hetzner Cloud API token. Single token shared by Terraform (provision) and Hetzner CCM/CSI (in-cluster).      |
-| **kube-system**                       | The namespace where Cilium, CCM, CSI, metrics-server, and the etcd-snapshot S3 config Secret live.            |
-| **mc**                                | MinIO Client — single-binary S3-compatible CLI. Used during restore to download the snapshot from Hetzner Object Storage (ADR-0009). |
-| **node-password Secret**              | k3s' per-node password kept in `kube-system` as `<nodename>.node-password.k3s`. Used at agent join time to prevent identity collisions. |
-| **Object Storage**                    | Hetzner's S3-compatible blob storage. Used here for both Terraform state and etcd snapshots.                  |
-| **PVC / PV**                          | Persistent Volume Claim / Persistent Volume. Backed by Hetzner block volumes via Hetzner CSI.                |
-| **restore sentinel**                  | The file `/var/lib/rancher/k3s/.recovery-restored` on cp-1, created after a successful restore (ADR-0004). Skips cluster-reset on subsequent cloud-init runs. |
-| **routine Infra Up**                  | An `Infra Up` workflow run with `restore_from_s3=false` (the default). Provisions / refreshes infra; no node touch on a healthy cluster. |
-| **`/livez` gate**                     | Step at the end of Infra Up that polls the API LB until the apiserver returns 200/401/403 or times out. ADR-0008. |
-| **`-replace`**                        | Terraform CLI flag forcing a specific resource address to be destroyed and re-created on apply, regardless of plan diff. |
-| **server-ca-bootstrap-hash**          | k3s-agent's pinned cluster CA fingerprint, stored in `/var/lib/rancher/k3s/agent/`. Cause of the worker x509 errors after restore (ADR-0006). |
-| **SKIP_ENABLE / SKIP_START**          | k3s install-script env vars (`INSTALL_K3S_SKIP_START`, `INSTALL_K3S_SKIP_ENABLE`) that prevent the install from enabling or starting the systemd unit. Used by restore (ADR-0004). |
-| **Token (k3s)**                       | `random_password.k3s_token` in Terraform state. Cluster bootstrap token for node joining.                    |
-| **udev rename**                       | The Ubuntu-default mechanism that renames `eth*` → `en*sN` based on PCI position. Hetzner private NICs typically end up as `enp7s0`. |
+| Term                         | Meaning                                                                                                                                                                            |
+|------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Argo CD (home cluster)**   | GitOps controller running in a separate, operator-owned cluster; manages this cluster's workloads from Git.                                                                        |
+| **bootstrap CP**             | `control-plane-01` — the only CP that runs `--cluster-init` (fresh) or `--cluster-reset` (restore). Index 0.                                                                       |
+| **CCM**                      | Cloud Controller Manager. Hetzner CCM sets node `ProviderID`s and provisions Hetzner LBs for `Service.type=LoadBalancer`.                                                          |
+| **CCM-managed LB**           | A Hetzner Load Balancer created from a Kubernetes `Service` annotation by Hetzner CCM. Used for the Traefik ingress LB.                                                            |
+| **CNI**                      | Container Network Interface plugin. This cluster uses Cilium with `--flannel-backend=none --disable-network-policy`.                                                               |
+| **cluster-reset**            | The k3s flag `--cluster-reset` (with optional `--cluster-reset-restore-path`) that forgets all etcd peers and either initializes a new cluster of one or restores from a snapshot. |
+| **cloud-init template**      | `bootstrap/cloud-init/node.yaml` — single Terraform `templatefile` rendered per-node, role-conditional.                                                                            |
+| **CSI**                      | Container Storage Interface driver. Hetzner CSI provisions Hetzner block volumes for PVCs.                                                                                         |
+| **decompressSnapshot bug**   | k3s `v1.35.3+k3s1` bug in `pkg/etcd/snapshot.go` where `filepath.Join(snapshotDir, absPath)` doubles the prefix for `.zip` paths. See ADR-0003.                                    |
+| **etcd-s3**                  | k3s' built-in mechanism for uploading scheduled etcd snapshots to S3 and (in normal operation) downloading them for restore.                                                       |
+| **GH Actions secret**        | Encrypted variable scoped to the `production` GitHub Environment, exposed to workflows via `secrets.X` in expressions.                                                             |
+| **HCLOUD_TOKEN**             | Hetzner Cloud API token. Single token shared by Terraform (provision) and Hetzner CCM/CSI (in-cluster).                                                                            |
+| **kube-system**              | The namespace where Cilium, CCM, CSI, metrics-server, and the etcd-snapshot S3 config Secret live.                                                                                 |
+| **mc**                       | MinIO Client — single-binary S3-compatible CLI. Used during restore to download the snapshot from Hetzner Object Storage (ADR-0009).                                               |
+| **node-password Secret**     | k3s' per-node password kept in `kube-system` as `<nodename>.node-password.k3s`. Used at agent join time to prevent identity collisions. Pre-seeded from a stable per-node value held in Terraform state (`random_password.node_password`) so reboot/replace/restore don't cause a mismatch (ADR-0012). |
+| **`ignore_changes = [user_data]`** | Lifecycle rule on `hcloud_server` (ADR-0013). `user_data` is `ForceNew`, so without it any cloud-init edit would plan an all-node replacement (blocked by the CP guard). Cloud-init changes instead roll out via deliberate `terraform apply -replace=<node>`. |
+| **Object Storage**           | Hetzner's S3-compatible blob storage. Used here for both Terraform state and etcd snapshots.                                                                                       |
+| **PVC / PV**                 | Persistent Volume Claim / Persistent Volume. Backed by Hetzner block volumes via Hetzner CSI.                                                                                      |
+| **restore sentinel**         | The file `/var/lib/rancher/k3s/.recovery-restored` on cp-1, created after a successful restore (ADR-0004). Skips cluster-reset on subsequent cloud-init runs.                      |
+| **routine Infra Up**         | An `Infra Up` workflow run with `restore_from_s3=false` (the default). Provisions / refreshes infra; no node touch on a healthy cluster.                                           |
+| **`/livez` gate**            | Step at the end of Infra Up that polls the API LB until the apiserver returns 200/401/403 or times out. ADR-0008.                                                                  |
+| **`-replace`**               | Terraform CLI flag forcing a specific resource address to be destroyed and re-created on apply, regardless of plan diff.                                                           |
+| **server-ca-bootstrap-hash** | k3s-agent's pinned cluster CA fingerprint, stored in `/var/lib/rancher/k3s/agent/`. Cause of the worker x509 errors after restore (ADR-0006).                                      |
+| **SKIP_ENABLE / SKIP_START** | k3s install-script env vars (`INSTALL_K3S_SKIP_START`, `INSTALL_K3S_SKIP_ENABLE`) that prevent the install from enabling or starting the systemd unit. Used by restore (ADR-0004). |
+| **Token (k3s)**              | `random_password.k3s_token` in Terraform state. Cluster bootstrap token for node joining.                                                                                          |
+| **udev rename**              | The Ubuntu-default mechanism that renames `eth*` → `en*sN` based on PCI position. Hetzner private NICs typically end up as `enp7s0`.                                               |

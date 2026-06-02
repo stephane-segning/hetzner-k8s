@@ -7,6 +7,7 @@ discoveries near the artifacts they produced.
 
 ## Index
 
-| Date    | Title                                                                                |
-|---------|--------------------------------------------------------------------------------------|
-| 2026-05 | [Cluster restore from S3 — 10 PRs, six bugs, and what to do differently](2026-05-cluster-restore.md) |
+| Date       | Title                                                                                |
+|------------|--------------------------------------------------------------------------------------|
+| 2026-05    | [Cluster restore from S3 — 10 PRs, six bugs, and what to do differently](2026-05-cluster-restore.md) |
+| 2026-06-02 | [All workers NotReady after reboot: node-password rejection](2026-06-02-worker-node-password-rejection.md) |

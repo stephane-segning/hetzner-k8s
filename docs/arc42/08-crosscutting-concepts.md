@@ -83,5 +83,6 @@ identical.
 | k3s cluster-reset path-doubling bug           | k3s logs `open ...snapshots/.../snapshots/...zip: no such file`                       | `/var/log/k3s-bootstrap.log` on cp-1                           |
 | Restored member-list peer URL mismatch        | k3s.service `activating` forever; logs `this server is not a member of the etcd cluster` | `journalctl -u k3s` on cp-1                                    |
 | Worker CA pinning                             | k3s-agent logs `x509: certificate signed by unknown authority`                         | `journalctl -u k3s-agent` on the worker                        |
+| Node-password rejected (reboot/replace/restore) | Node `NotReady`, `Kubelet stopped posting node status`; agent logs `Node password rejected` | `journalctl -u k3s-agent`; fixed by ADR-0012, break-glass in recovery.md |
 | Etcd quorum break (CP destroy in parallel)    | API LB returns 503; cp-1 logs `authentication handshake failed: context deadline exceeded` | `journalctl -u k3s` on cp-1                                    |
 | Stale Hetzner Object Storage cred             | `verify-etcd-backups` workflow fails; mc download in restore fails                    | Workflow logs; rotate creds; `make platform-up` to reassert    |

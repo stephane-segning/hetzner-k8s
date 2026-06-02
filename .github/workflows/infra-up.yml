@@ -207,23 +207,31 @@ jobs:
               } >> "$GITHUB_STEP_SUMMARY"
             else
               # Cluster API is not reachable. Treat as first restore: replace
-              # non-bootstrap CPs (to wipe stale etcd data) and workers (to
-              # wipe stale CA pinning). cp-1 itself gets replaced if its
-              # user_data changed (the restore branch in cloud-init).
+              # ALL control planes and ALL workers. There is no quorum to
+              # protect (the cluster is gone), so replacing every CP is safe
+              # and necessary: cp-1 runs --cluster-reset to restore from the
+              # snapshot, cp-2/cp-3 join it fresh, workers join with fresh CA.
+              #
+              # cp-1 (the bootstrap CP) MUST be replaced explicitly here. We
+              # used to rely on its restore-mode user_data differing from
+              # normal mode to trigger replacement, but ADR-0013 added
+              # ignore_changes=[user_data] on the server, so user_data drift
+              # no longer forces a replace. The explicit -replace below
+              # bypasses ignore_changes and recreates cp-1 with the current
+              # (restore-branch) cloud-init.
               while IFS= read -r addr; do
                 [ -n "$addr" ] && replace_args+=("-replace=$addr")
               done < <(
                 {
                   terraform -chdir="$TF_DIR" state list 2>/dev/null \
-                    | grep -E '^module\.servers\.hcloud_server\.main\["control-plane-[0-9]+"\]$' \
-                    | grep -v '"control-plane-01"'
+                    | grep -E '^module\.servers\.hcloud_server\.main\["control-plane-[0-9]+"\]$'
                   terraform -chdir="$TF_DIR" state list 2>/dev/null \
                     | grep -E '^module\.servers\.hcloud_server\.main\["worker-[0-9]+"\]$'
                 } || true
               )
               {
                 echo "Cluster API not reachable (status $api_status); treating as first restore."
-                echo "Force-replacing non-bootstrap control planes and all workers:"
+                echo "Force-replacing ALL control planes (incl. bootstrap cp-1) and all workers:"
                 printf '  - %s\n' "${replace_args[@]}"
               } >> "$GITHUB_STEP_SUMMARY"
             fi

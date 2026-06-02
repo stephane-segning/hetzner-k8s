@@ -31,6 +31,21 @@ resource "hcloud_server" "main" {
     ipv4_enabled = true
     ipv6_enabled = true
   }
+
+  # user_data is ForceNew on hcloud_server: any cloud-init edit would
+  # otherwise make a routine Infra Up plan to replace EVERY server at once,
+  # which the Infra Up workflow's control-plane-replacement guard then
+  # blocks (and replacing all control planes simultaneously would break
+  # etcd quorum anyway). cloud-init only runs at first boot, so an in-place
+  # user_data change never reaches an already-provisioned node regardless.
+  # We therefore ignore user_data drift here and roll cloud-init changes out
+  # deliberately via `terraform apply -replace=...` of specific nodes (which
+  # bypasses ignore_changes and recreates with the current rendered
+  # user_data). The Infra Up restore flow does exactly that, including the
+  # bootstrap control plane. See ADR-0013.
+  lifecycle {
+    ignore_changes = [user_data]
+  }
 }
 
 resource "hcloud_volume" "data" {
