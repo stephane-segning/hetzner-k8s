@@ -38,6 +38,13 @@ narrates.
 | 0009  | [Use `mc` for inline S3 snapshot download during restore](../adr/0009-mc-for-inline-s3-download-during-restore.md) | k3s' built-in S3 path also hits the path-doubling bug           |
 | 0010  | [Override `etcd-s3=false` on cluster-reset CLI](../adr/0010-etcd-s3-false-on-cluster-reset.md)                | config.yaml's `etcd-s3: true` re-enters the broken code path    |
 | 0011  | [Pass `--node-ip` and `--advertise-address` to cluster-reset](../adr/0011-node-ip-on-cluster-reset.md)        | Restored member list records the public peer URL                |
+| 0012  | [Stable per-node password (reboot/replace/restore)](../adr/0012-deterministic-node-password.md)              | Node-password mismatch leaves nodes NotReady                    |
+| 0013  | [Ignore `user_data` drift; roll cloud-init via `-replace`](../adr/0013-ignore-user-data-changes.md)          | Cloud-init edit forces all-node replace; guard blocks Infra Up  |
+| 0014  | [Exclude control planes from external LB target pools](../adr/0014-exclude-control-planes-from-external-lb-targets.md) | A stale CP target fails the entire ingress LB sync   |
+| 0015  | [Disable k3s's bundled metrics-server](../adr/0015-disable-bundled-metrics-server.md)                        | Name collision breaks `kubectl top` + HPA cluster-wide          |
+
+> Every trap behind these ADRs is also consolidated, indexed by symptom,
+> in [`docs/caveats-and-traps.md`](../caveats-and-traps.md).
 
 ## 9.3 How decisions are recorded
 
