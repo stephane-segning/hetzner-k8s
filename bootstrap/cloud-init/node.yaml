@@ -230,6 +230,7 @@ write_files:
             --disable traefik \
             --disable servicelb \
             --disable local-storage \
+            --disable metrics-server \
             --disable-network-policy \
             --flannel-backend=none \
             --write-kubeconfig-mode "0644"%{ if extra_server_args != "" } \
@@ -391,6 +392,7 @@ write_files:
             --disable traefik \
             --disable servicelb \
             --disable local-storage \
+            --disable metrics-server \
             --disable-network-policy \
             --flannel-backend=none \
             --write-kubeconfig-mode "0644"%{ if extra_server_args != "" } \
@@ -424,6 +426,7 @@ write_files:
             --disable traefik \
             --disable servicelb \
             --disable local-storage \
+            --disable metrics-server \
             --disable-network-policy \
             --flannel-backend=none \
             --write-kubeconfig-mode "0644"%{ if extra_server_args != "" } \

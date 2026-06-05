@@ -128,6 +128,32 @@ This document records key decisions made during the design of this platform.
 
 - Start k3s with `--disable local-storage`
 
+### K3s metrics-server: Disabled (owned by the platform GitOps instead)
+
+**Decision**: Disable K3s's bundled `metrics-server`.
+
+**Rationale**:
+
+- The platform (ai-helm `charts/apps`) deploys the upstream
+  `kubernetes-sigs/metrics-server` chart with **HA (2 replicas)** + tuned kubelet
+  args. K3s's built-in single-replica metrics-server **collides on the
+  `metrics-server` name in `kube-system`**: the bundled Deployment (labels
+  `k8s-app: metrics-server`) keeps running while the chart's Service (selector
+  `app.kubernetes.io/*`) ends up with **no matching endpoints** → the
+  `v1beta1.metrics.k8s.io` APIService goes `Available=False` → `kubectl top` and
+  HPA metrics break.
+- One owner only. Let the GitOps chart own metrics-server end-to-end.
+
+**Implementation**:
+
+- Start every k3s **server** with `--disable metrics-server` (all three server
+  blocks in `bootstrap/cloud-init/node.yaml`; agents take no `--disable`).
+- ⚠️ Takes effect on (re)provision or a k3s restart with the flag. On a live
+  cluster, after the flag is in place, delete the bundled
+  `deployment/metrics-server` + `service/metrics-server` in `kube-system` so the
+  ai-helm chart's resources reconcile cleanly (and decommission any stale
+  `ai-metrics-server` ArgoCD app from the old generation).
+
 ## Networking
 
 ### Private Network Only
