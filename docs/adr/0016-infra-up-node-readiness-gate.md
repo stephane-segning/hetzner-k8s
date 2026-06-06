@@ -42,18 +42,39 @@ before the endpoint summary. It:
   preserved across an etcd restore (it lives in the snapshot), so this
   kubeconfig stays valid through restore; it is only stale after a
   from-scratch rebuild with a brand-new CA (break-glass, rare).
-- Polls `kubectl get nodes` until **at least `EXPECTED` nodes are `Ready`**,
-  within the same time budget as the `/livez` wait (10 min routine, 15 min
-  restore). On timeout it prints `kubectl get nodes -o wide` and fails the
-  run loudly, pointing at the `replace_nodes` recovery path.
+- Polls `kubectl get nodes` until **at least `EXPECTED` nodes are *freshly*
+  `Ready`**, within the same time budget as the `/livez` wait (10 min
+  routine, 15 min restore). On timeout it prints `kubectl get nodes -o wide`
+  and fails the run loudly, pointing at the `replace_nodes` recovery path.
 
 Design choices:
 
-- **`Ready >= EXPECTED`, not `== EXPECTED`.** A `-replace` reuses the node
-  name (so no duplicate object), but a scale-down or a transient leftover
-  can leave a stale `NotReady` Node object. Requiring exact equality would
-  fail on harmless ghosts. `>=` asserts we have the capacity we asked for;
-  the step still reports any extra NotReady objects so they get cleaned up.
+- **`Ready >= EXPECTED`, not `== EXPECTED`.** Exact equality on the *Ready*
+  count would fail when extra `Ready` nodes exist transiently — e.g. a
+  scale-down or rolling replace where an old node still reports `Ready`
+  before it is removed. (A stale *NotReady* ghost would not break an
+  `==` on the Ready count, but it *would* break a "require all registered
+  nodes Ready" check — which is the stricter variant we also reject.) `>=`
+  asserts we have at least the capacity we asked for; the step still reports
+  any extra NotReady/stale objects so they get cleaned up.
+- **Count only *freshly* Ready nodes** (Ready condition `lastHeartbeatTime`
+  within `FRESH_SECONDS=120`). `replace_nodes` recreates a node under the
+  *same* Node-object name; that object can keep a stale `Ready=True` until
+  the node controller marks it `Unknown`. Since `/livez` returns instantly
+  on an already-running cluster, a plain Ready check could pass on the old
+  status before the replacement VM rejoins. Requiring a recent heartbeat
+  means only a live kubelet satisfies the gate.
+- **Pre-CNI degradation.** A from-scratch bootstrap starts k3s with
+  `--flannel-backend=none`; nodes stay `NotReady` until Platform Up installs
+  Cilium. If no Cilium DaemonSet is found (checked with retries; defaults to
+  "present" so routine runs always enforce Ready), the gate degrades to a
+  **registration-only** check (`registered >= EXPECTED`) with a loud warning,
+  rather than deadlocking that supported window.
+- **Bounded kubectl calls.** Every `kubectl` runs with
+  `--request-timeout=15s`. The default is `0` (no timeout), so a stale or
+  blackholed endpoint would block past `DEADLINE` — the loop only re-checks
+  the clock after kubectl returns — and the job would hang instead of
+  failing with diagnostics.
 - **Skip-with-loud-warning when the kubeconfig secret is absent**, rather
   than hard-fail. This keeps Infra Up usable in an environment that hasn't
   configured the secret while still making the gap visible (`::warning::`
