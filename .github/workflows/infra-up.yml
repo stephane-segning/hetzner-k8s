@@ -18,6 +18,11 @@ on:
         required: false
         default: ""
         type: string
+      replace_nodes:
+        description: 'Comma/space-separated node keys to force-replace this run, e.g. "worker-03" or "worker-01,worker-03". Destroys+recreates each VM so cloud-init re-runs and the node rejoins fresh. Use to recover a wedged worker without a full restore. Control-plane keys also require allow_control_plane_replacement=true.'
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -144,6 +149,7 @@ jobs:
       - name: Terraform plan
         env:
           RESTORE_FROM_S3: ${{ inputs.restore_from_s3 && 'true' || 'false' }}
+          REPLACE_NODES: ${{ inputs.replace_nodes }}
         run: |
           # When restoring from S3:
           #
@@ -236,6 +242,39 @@ jobs:
               } >> "$GITHUB_STEP_SUMMARY"
             fi
           fi
+
+          # Operator-requested targeted replacements, independent of restore
+          # mode. Lets us recover a single wedged node (e.g. a worker whose
+          # host hung) through the supported control surface instead of a
+          # console reboot or a local `terraform apply -replace`. Accepts
+          # comma/space-separated node keys; both the padded state-key form
+          # (worker-03) and the unpadded kubectl-name form (worker-3) work.
+          # Each is validated against state and mapped to its hcloud_server
+          # address. Control-plane keys land in the plan as a delete and are
+          # caught by the "Guard control-plane replacements" step, so they
+          # still require allow_control_plane_replacement=true.
+          if [ -n "${REPLACE_NODES:-}" ]; then
+            requested=$(printf '%s\n' "$REPLACE_NODES" | tr ',' '\n' | tr ' ' '\n' | sed '/^[[:space:]]*$/d')
+            while IFS= read -r key; do
+              [ -z "$key" ] && continue
+              prefix="${key%-*}"
+              numraw="${key##*-}"
+              if { [ "$prefix" = "control-plane" ] || [ "$prefix" = "worker" ]; } \
+                 && printf '%s' "$numraw" | grep -Eq '^[0-9]+$'; then
+                norm=$(printf '%s-%02d' "$prefix" "$((10#$numraw))")
+                addr="module.servers.hcloud_server.main[\"$norm\"]"
+                if terraform -chdir="$TF_DIR" state list 2>/dev/null | grep -qxF "$addr"; then
+                  replace_args+=("-replace=$addr")
+                  echo "replace_nodes: will force-replace $norm ($addr)" >> "$GITHUB_STEP_SUMMARY"
+                else
+                  echo "replace_nodes: '$key' -> $addr not found in state; skipping" | tee -a "$GITHUB_STEP_SUMMARY"
+                fi
+              else
+                echo "replace_nodes: ignoring invalid entry '$key' (expected worker-N or control-plane-N)" | tee -a "$GITHUB_STEP_SUMMARY"
+              fi
+            done <<< "$requested"
+          fi
+
           terraform -chdir="$TF_DIR" plan "${replace_args[@]}" -out="$RUNNER_TEMP/tfplan"
 
       - name: Guard control-plane replacements
