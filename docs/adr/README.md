@@ -25,6 +25,8 @@ including the painful ones learned the hard way.
 | 0011  | [Pass `--node-ip` and `--advertise-address` to cluster-reset](0011-node-ip-on-cluster-reset.md) | Accepted |
 | 0012  | [Stable per-node password to survive reboot/replace/restore](0012-deterministic-node-password.md) | Accepted |
 | 0013  | [Ignore `user_data` drift; roll cloud-init out via `-replace`](0013-ignore-user-data-changes.md) | Accepted |
+| 0014  | [Exclude control planes from external LoadBalancer target pools](0014-exclude-control-planes-from-external-lb-targets.md) | Accepted |
+| 0015  | [Disable k3s's bundled metrics-server (platform GitOps owns it)](0015-disable-bundled-metrics-server.md) | Accepted |
 
 ## Template
 
