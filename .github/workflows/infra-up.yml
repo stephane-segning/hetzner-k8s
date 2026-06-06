@@ -362,6 +362,79 @@ jobs:
           } | tee -a "$GITHUB_STEP_SUMMARY"
           exit 1
 
+      - name: Verify all expected nodes are Ready
+        env:
+          REMOTE_CLUSTER_KUBECONFIG_B64: ${{ secrets.REMOTE_CLUSTER_KUBECONFIG_B64 }}
+          RESTORE_FROM_S3: ${{ inputs.restore_from_s3 && 'true' || 'false' }}
+        run: |
+          # The /livez gate above proves the API server answers on the LB,
+          # but says nothing about workers: a NotReady or never-joined worker
+          # sails past it and the run goes green on a degraded cluster. This
+          # step closes that gap by asserting the cluster actually has the
+          # control_plane_count + worker_count nodes we provisioned, all Ready.
+          #
+          # Authenticates with the same REMOTE_CLUSTER_KUBECONFIG_B64 secret
+          # the Verify Etcd Backups workflow uses. The cluster CA is preserved
+          # across restore (etcd snapshot holds it), so this kubeconfig stays
+          # valid through a restore; it is only stale after a from-scratch
+          # rebuild with a brand-new CA (break-glass, rare).
+          EXPECTED=$(( TF_VAR_control_plane_count + TF_VAR_worker_count ))
+
+          if [ -z "$REMOTE_CLUSTER_KUBECONFIG_B64" ]; then
+            {
+              echo "::warning::REMOTE_CLUSTER_KUBECONFIG_B64 not set — node-readiness gate skipped."
+              echo "Cannot verify that all $EXPECTED nodes are Ready. Set the secret"
+              echo "(same one Verify Etcd Backups uses) to make Infra Up fail on a"
+              echo "NotReady or missing node instead of reporting success."
+            } | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          printf '%s' "$REMOTE_CLUSTER_KUBECONFIG_B64" | base64 --decode > "$RUNNER_TEMP/kubeconfig"
+          chmod 600 "$RUNNER_TEMP/kubeconfig"
+          export KUBECONFIG="$RUNNER_TEMP/kubeconfig"
+
+          # Fresh workers must apt-update/upgrade, install k3s, bring up the
+          # private NIC and join before they go Ready; allow restore extra slack.
+          if [ "$RESTORE_FROM_S3" = "true" ]; then
+            DEADLINE=$(( $(date +%s) + 900 ))   # 15 min
+          else
+            DEADLINE=$(( $(date +%s) + 600 ))   # 10 min
+          fi
+
+          ready=0; total=0
+          while [ "$(date +%s)" -lt "$DEADLINE" ]; do
+            if nodes_json=$(kubectl get nodes -o json 2>/dev/null); then
+              total=$(printf '%s' "$nodes_json" | jq '.items | length')
+              ready=$(printf '%s' "$nodes_json" | jq '
+                [.items[] | select(any(.status.conditions[]?; .type == "Ready" and .status == "True"))] | length
+              ')
+              if [ "$ready" -ge "$EXPECTED" ]; then
+                echo "All $EXPECTED expected nodes are Ready (Ready=$ready, registered=$total)." | tee -a "$GITHUB_STEP_SUMMARY"
+                kubectl get nodes -o wide >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+                if [ "$total" -gt "$ready" ]; then
+                  echo "Note: $((total - ready)) node object(s) are NotReady/leftover — clean up stale Node objects if a node was scaled down or replaced." >> "$GITHUB_STEP_SUMMARY"
+                fi
+                exit 0
+              fi
+              echo "$(date -u '+%H:%M:%SZ') nodes Ready=$ready registered=$total expected=$EXPECTED"
+            else
+              echo "$(date -u '+%H:%M:%SZ') kubectl get nodes failed (API/kubeconfig not ready yet)"
+            fi
+            sleep 15
+          done
+
+          {
+            echo "Node-readiness gate FAILED: expected $EXPECTED Ready nodes, saw $ready (registered $total)."
+            echo
+            kubectl get nodes -o wide 2>&1 || echo "(kubectl get nodes failed; kubeconfig may be stale after a CA change)"
+            echo
+            echo "A node is NotReady or never joined. Recover it through the supported path —"
+            echo "re-run Infra Up with replace_nodes=<key> (e.g. worker-03) — then re-run."
+            echo "See docs/recovery.md > Recover a wedged / NotReady node."
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          exit 1
+
       - name: Show endpoint summary
         run: |
           echo "API endpoint: $(terraform -chdir="$TF_DIR" output -raw api_server_endpoint)" >> "$GITHUB_STEP_SUMMARY"
