@@ -193,9 +193,37 @@ Confirm the node's on-disk password is present first
 is missing, the node will mint a fresh one on next start and the deleted
 Secret will be recreated from it.
 
-### Single Node Failure
+### Recover a wedged / `NotReady` node (GH Actions — supported path)
 
-If a single node fails:
+When a single node dies but the cluster as a whole is healthy — e.g. a
+worker host hard-hangs (answers ping/TCP but `sshd` and kubelet are stuck;
+kubelet stopped posting status) — recover it through **Infra Up** rather
+than a console reboot or a local `terraform apply`. Workers carry no etcd
+vote, so destroying and recreating one is safe; cloud-init re-runs and the
+node rejoins fresh against the same CA (its node-password is stable per
+ADR-0012).
+
+1. Identify the dead node from `kubectl get nodes` (e.g. `…-worker-3`
+   `NotReady`).
+2. Run **Infra Up** with:
+   - `replace_nodes` = the node key, e.g. `worker-03`. Both the padded
+     state-key form (`worker-03`) and the unpadded kubectl-name form
+     (`worker-3`) are accepted; multiple keys may be comma/space-separated.
+   - Leave `restore_from_s3=false`.
+   - For a **control-plane** key you must *also* set
+     `allow_control_plane_replacement=true` — and only as deliberate
+     recovery work (it is gated for good reason; see the control-plane
+     section above and ADR-0007).
+3. The plan force-replaces only the named node(s); every other node is a
+   no-op. The post-apply readiness gate confirms the cluster is healthy
+   before the run reports success.
+
+Invalid or not-in-state keys are reported in the run summary and skipped,
+so a typo cannot silently replace the wrong node.
+
+### Single Node Failure (break-glass, local Terraform)
+
+If a single node fails and you cannot use Infra Up:
 
 1. **Check Hetzner Console**: Verify the server status
 2. **Rebuild via Terraform**:
