@@ -40,9 +40,9 @@ In rough priority order:
 
 ## 1.3 Stakeholders
 
-| Role                                      | Concerns                                                                          |
-|-------------------------------------------|-----------------------------------------------------------------------------------|
-| Cluster operator (you, future you)        | Reliable recovery; minimal toil; clear runbooks                                   |
-| Workload owners (Keycloak, CNPG, Redis,…) | Cluster comes back from incidents without losing my PVC data                      |
-| Home-cluster Argo CD                      | Stable API endpoint, working `argocd-manager` ServiceAccount token                |
+| Role                                      | Concerns                                                                             |
+|-------------------------------------------|--------------------------------------------------------------------------------------|
+| Cluster operator (you, future you)        | Reliable recovery; minimal toil; clear runbooks                                      |
+| Workload owners (Keycloak, CNPG, Redis,…) | Cluster comes back from incidents without losing my PVC data                         |
+| Home-cluster Argo CD                      | Stable API endpoint, working `argocd-manager` ServiceAccount token                   |
 | Future contributors                       | Can read the code and ADRs and understand why each surprising thing is the way it is |

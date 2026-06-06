@@ -31,10 +31,10 @@ Hetzner Object Storage (separate but same project credentials)
 
 ## 7.2 Server specifications
 
-| Role             | Count | Type   | vCPU | RAM   | Disk   | Notes                                            |
-|------------------|-------|--------|------|-------|--------|--------------------------------------------------|
-| control-plane    | 3     | CPX22  | 3    | 4 GB  | 80 GB  | k3s server with embedded etcd                    |
-| worker           | 2-3   | CPX42  | 8    | 16 GB | 240 GB | k3s-agent; data volume optional                  |
+| Role          | Count | Type  | vCPU | RAM   | Disk   | Notes                           |
+|---------------|-------|-------|------|-------|--------|---------------------------------|
+| control-plane | 3     | CPX22 | 3    | 4 GB  | 80 GB  | k3s server with embedded etcd   |
+| worker        | 2-3   | CPX42 | 8    | 16 GB | 240 GB | k3s-agent; data volume optional |
 
 Image: Ubuntu 24.04 LTS (Noble Numbat).
 
@@ -42,8 +42,8 @@ Image: Ubuntu 24.04 LTS (Noble Numbat).
 
 - Single subnet `10.0.0.0/24` inside the project's private network.
 - Deterministic private IP assignment (Terraform `cidrhost`):
-  - cp-NN → `10.0.0.10 + (NN-1)`
-  - worker-NN → `10.0.0.20 + (NN-1)`
+    - cp-NN → `10.0.0.10 + (NN-1)`
+    - worker-NN → `10.0.0.20 + (NN-1)`
 - Public IPv4 on every server (used for outbound + SSH break-glass).
   Inbound public 80/443/6443 closed at firewall.
 - Inbound public SSH (22) allowed at firewall (gated by SSH key, no
@@ -69,9 +69,9 @@ Image: Ubuntu 24.04 LTS (Noble Numbat).
   `/var/lib/rancher/k3s/server/db/etcd/`. Replicated via raft across the
   three CPs.
 - **Etcd snapshots**: local `/var/lib/rancher/k3s/server/db/snapshots/`
-  + uploaded to S3 every 6 hours by k3s' built-in cron. Retention: 14
-  locally per node (configurable via `etcd_snapshot_retention`),
-  matching count in S3.
+    + uploaded to S3 every 6 hours by k3s' built-in cron. Retention: 14
+      locally per node (configurable via `etcd_snapshot_retention`),
+      matching count in S3.
 - **Workload PVCs**: provisioned via Hetzner CSI as Hetzner block
   volumes attached to the worker hosting the consuming Pod. Storage
   class `hcloud-volumes` (from the CSI Helm chart).

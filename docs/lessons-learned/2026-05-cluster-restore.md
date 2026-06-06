@@ -19,18 +19,18 @@ differently next time.
 
 ## Timeline
 
-| PR  | What it tried to fix                                                      | What it produced                                                            |
-|-----|---------------------------------------------------------------------------|------------------------------------------------------------------------------|
-| #5  | Add an S3 restore branch to cloud-init + Infra Up workflow inputs         | Cloud-init **failed to parse** because the bash heredoc body sat at column 1 in a YAML literal-block scalar |
-| #6  | Force-replace non-bootstrap CPs on restore (so they don't keep stale etcd) | Correct on first restore; broke etcd quorum on re-runs (fixed later in #14)  |
-| #7  | Replace heredoc env file with inline shell vars (fixes #5)                | Cloud-init parses. Cluster-reset invocation still fails with doubled-path on `.zip` snapshots |
-| #8  | Bring up the Hetzner private NIC explicitly; download snapshot via `mc`; add `/livez` gate | Three real fixes; cluster-reset still hits the doubled-path bug              |
-| #9  | Pass snapshot **basename** instead of absolute path to cluster-reset      | Different failure mode: `etcd: snapshot path does not exist` (k3s chdir's before the stat) |
-| #10 | `cd` to snapshots dir before invoking k3s, then pass basename             | Same `snapshot path does not exist` error — k3s' working directory after chdir is not the snapshots dir |
+| PR  | What it tried to fix                                                                                                                         | What it produced                                                                                                                                                   |
+|-----|----------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| #5  | Add an S3 restore branch to cloud-init + Infra Up workflow inputs                                                                            | Cloud-init **failed to parse** because the bash heredoc body sat at column 1 in a YAML literal-block scalar                                                        |
+| #6  | Force-replace non-bootstrap CPs on restore (so they don't keep stale etcd)                                                                   | Correct on first restore; broke etcd quorum on re-runs (fixed later in #14)                                                                                        |
+| #7  | Replace heredoc env file with inline shell vars (fixes #5)                                                                                   | Cloud-init parses. Cluster-reset invocation still fails with doubled-path on `.zip` snapshots                                                                      |
+| #8  | Bring up the Hetzner private NIC explicitly; download snapshot via `mc`; add `/livez` gate                                                   | Three real fixes; cluster-reset still hits the doubled-path bug                                                                                                    |
+| #9  | Pass snapshot **basename** instead of absolute path to cluster-reset                                                                         | Different failure mode: `etcd: snapshot path does not exist` (k3s chdir's before the stat)                                                                         |
+| #10 | `cd` to snapshots dir before invoking k3s, then pass basename                                                                                | Same `snapshot path does not exist` error — k3s' working directory after chdir is not the snapshots dir                                                            |
 | #11 | **Pre-decompress the snapshot with `unzip`**, pass the absolute path of the uncompressed file; add `INSTALL_K3S_SKIP_ENABLE=true` + sentinel | Cluster-reset finally completes. 22 MB etcd data loaded, defrag completed. New failure: `k3s.service` can't start because etcd member list has the public peer URL |
-| #12 | Pass `--node-ip` / `--advertise-address` to the cluster-reset invocation  | Cluster-reset records the private peer URL. cp-1 comes up cleanly with the restored data. Workers loop on `x509: certificate signed by unknown authority` |
-| #13 | Extend `-replace` to workers when `restore_from_s3=true`                  | First restore now works end-to-end. Re-runs (against an already-restored cluster) destroy cp-2 and cp-3 simultaneously, breaking etcd quorum |
-| #14 | Gate non-bootstrap CP `-replace` on API LB reachability                   | Re-runs leave healthy CPs untouched. Quorum-break trap closed.              |
+| #12 | Pass `--node-ip` / `--advertise-address` to the cluster-reset invocation                                                                     | Cluster-reset records the private peer URL. cp-1 comes up cleanly with the restored data. Workers loop on `x509: certificate signed by unknown authority`          |
+| #13 | Extend `-replace` to workers when `restore_from_s3=true`                                                                                     | First restore now works end-to-end. Re-runs (against an already-restored cluster) destroy cp-2 and cp-3 simultaneously, breaking etcd quorum                       |
+| #14 | Gate non-bootstrap CP `-replace` on API LB reachability                                                                                      | Re-runs leave healthy CPs untouched. Quorum-break trap closed.                                                                                                     |
 
 Between PR #13 and PR #14 the operator had to manually `systemctl stop
 k3s; k3s server --cluster-reset; systemctl start k3s` on cp-1 to forget
@@ -97,7 +97,8 @@ fires for `.zip` paths because that's the only branch that calls
 `decompressSnapshot` — uncompressed paths take the verbatim `else`
 branch.
 
-**Symptom:** `open /var/lib/rancher/k3s/server/db/snapshots/var/lib/rancher/k3s/server/db/snapshots/etcd-snapshot-<...>.zip: no such file or directory`.
+**Symptom:**
+`open /var/lib/rancher/k3s/server/db/snapshots/var/lib/rancher/k3s/server/db/snapshots/etcd-snapshot-<...>.zip: no such file or directory`.
 
 **Mitigation:** ADR-0003. Pre-decompress with `unzip`, pass the absolute
 path of the uncompressed file. Routes through the safe `else` branch.

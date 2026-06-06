@@ -2,7 +2,8 @@
 
 This guide covers the detailed bootstrap process for the Hetzner Kubernetes cluster.
 
-The supported operating path is GitHub Actions plus the Terraform-managed API load balancer. Direct public access to individual nodes is intentionally disabled.
+The supported operating path is GitHub Actions plus the Terraform-managed API load balancer. Direct public access to
+individual nodes is intentionally disabled.
 
 ## Prerequisites
 
@@ -43,6 +44,7 @@ make plan
 ```
 
 Review the plan output. You should see:
+
 - 1 private network
 - 1 firewall
 - 3 `CPX22` control-plane servers by default
@@ -65,6 +67,7 @@ make bootstrap
 ```
 
 This script will:
+
 1. Wait for SSH access on all nodes
 2. Wait for cloud-init to disable swap and bootstrap k3s on the first control-plane
 3. Wait for the API server to be ready
@@ -74,13 +77,17 @@ This script will:
 
 At this point the nodes are expected to be registered but may not be `Ready` until Cilium is installed.
 
-Each node starts k3s with its private Hetzner network IP as `node-ip`. Control-plane nodes also advertise their private address explicitly.
+Each node starts k3s with its private Hetzner network IP as `node-ip`. Control-plane nodes also advertise their private
+address explicitly.
 
-All nodes start kubelet with `cloud-provider=external`, and control-plane nodes disable the embedded K3s cloud controller so Hetzner CCM can set ProviderIDs and manage load balancer targets correctly.
+All nodes start kubelet with `cloud-provider=external`, and control-plane nodes disable the embedded K3s cloud
+controller so Hetzner CCM can set ProviderIDs and manage load balancer targets correctly.
 
-Note: `make bootstrap` requires private network access or an equivalent break-glass path to the nodes. It is not part of the normal public operating model.
+Note: `make bootstrap` requires private network access or an equivalent break-glass path to the nodes. It is not part of
+the normal public operating model.
 
 **Expected output:**
+
 ```
 ==> Starting k3s cluster bootstrap
 ==> Checking prerequisites...
@@ -112,7 +119,8 @@ export HCLOUD_NETWORK="<terraform network_id output>"
 make platform-install
 ```
 
-`make platform-install` uses Terraform outputs when they are available locally. Otherwise it uses `HCLOUD_TOKEN` and `HCLOUD_NETWORK` from the environment.
+`make platform-install` uses Terraform outputs when they are available locally. Otherwise it uses `HCLOUD_TOKEN` and
+`HCLOUD_NETWORK` from the environment.
 
 This installs:
 
@@ -133,7 +141,8 @@ kubectl get pods -A
 
 ## Step 7a: Prepare Argo CD Access
 
-After the cluster is reachable through the API load balancer, use the `argocd-manager` ServiceAccount for home-cluster Argo CD registration.
+After the cluster is reachable through the API load balancer, use the `argocd-manager` ServiceAccount for home-cluster
+Argo CD registration.
 
 The scaffolded resources live in `platform/base/cluster-access.yaml`.
 
@@ -249,7 +258,8 @@ curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC=agent sh -s - \
 ### Ingress Load Balancer Cannot Reach Traefik
 
 - Verify nodes advertise their private IPs in Kubernetes, not their public IPs
-- `kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{range .status.addresses[*]}  {.type}: {.address}{"\n"}{end}{"\n"}{end}'`
+-
+`kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{range .status.addresses[*]}  {.type}: {.address}{"\n"}{end}{"\n"}{end}'`
 - If the nodes were bootstrapped before the private `node-ip` fix, reprovision or reinstall k3s on them
 
 ## Next Steps

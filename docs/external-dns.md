@@ -109,4 +109,5 @@ It is a good fit for:
 - reducing manual A/CNAME record work
 - keeping Hetzner-hosted DNS aligned with Kubernetes state
 
-It is not required to get the base cluster working and should be treated as an optional phase after core cluster validation.
+It is not required to get the base cluster working and should be treated as an optional phase after core cluster
+validation.

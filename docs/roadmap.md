@@ -6,9 +6,11 @@ follow-up work visible (so it doesn't quietly bitrot) and to mark
 deliberate non-decisions (so a future reader knows we considered them).
 
 Companion documents:
+
 - [`DECISIONS.md`](../DECISIONS.md) — macro design choices already made
 - [`docs/arc42/11-risks-and-technical-debt.md`](arc42/11-risks-and-technical-debt.md) — risk and debt register
-- [`docs/lessons-learned/2026-05-cluster-restore.md`](lessons-learned/2026-05-cluster-restore.md) — narrative behind most of the "Next" items
+- [`docs/lessons-learned/2026-05-cluster-restore.md`](lessons-learned/2026-05-cluster-restore.md) — narrative behind
+  most of the "Next" items
 
 ## How to read
 
@@ -63,6 +65,7 @@ Expected residue post-restore (in the May 2026 run):
 `user_data`), but the exposure window is real. Rotation closes it.
 
 Procedure:
+
 1. Hetzner Cloud Console → Object Storage → Credentials → create new
    access key pair.
 2. Update GH Actions secrets `ETCD_S3_ACCESS_KEY_ID`,
@@ -144,6 +147,7 @@ that renders the template with realistic variable values and parses the
 result.
 
 Concrete:
+
 1. Add `tests/render/cloud-init.sh` that uses `terraform console` (or a
    minimal `terraform apply` against a scratch module) to render the
    cloud-init template with synthetic values that *exercise* the
@@ -161,6 +165,7 @@ snapshots live in a Hetzner Object Storage bucket with default settings.
 A bucket deletion (accidental or malicious) loses all snapshots.
 
 Concrete:
+
 1. Enable bucket versioning on the etcd snapshots bucket.
 2. Add a lifecycle rule: delete non-current versions after 30 days.
 3. Document the rotation cycle in `docs/runbooks/` (if/when we add a
@@ -176,6 +181,7 @@ This is a Hetzner Console action; no code change required.
 but maintaining them as the codebase evolves is real work.
 
 Concrete:
+
 1. File a k3s GitHub issue describing the
    `filepath.Join(snapshotDir, absRestorePath)` doubling, with the
    reproduction and the suggested patch (`if filepath.IsAbs(snapshotFilename) { snapshotPath = snapshotFilename }`).
@@ -193,6 +199,7 @@ in `docs/recovery.md` step 8. Although the API-reachability gate
 default in the operator's mental model is friction.
 
 Concrete:
+
 1. In `docs/recovery.md`, move the "flip back to false" guidance to a
    bold block at the end of the procedure section.
 2. Consider opening the post-recovery follow-up PR ourselves as part of
@@ -206,6 +213,7 @@ type the exact snapshot filename. A typo is rejected by cloud-init but
 only after the VMs are created, which wastes ~3 minutes per typo.
 
 Concrete:
+
 1. In the Infra Up `Validate restore inputs` step, when
    `restore_from_s3=true`, also run `mc ls` against the configured S3
    path to confirm the named file exists.
@@ -240,6 +248,7 @@ in the same Hetzner Cloud project (and likely the same region) as the
 cluster. A regional Hetzner incident takes both down.
 
 Approaches considered:
+
 - Hetzner Object Storage cross-region: not currently a Hetzner feature.
 - Use a separate Hetzner project in a different region: doubles the
   storage cost (~€6/month) but adds real isolation.
@@ -288,6 +297,7 @@ fmt + validate, YAML render, shellcheck. No end-to-end test of a real
 Infra Up run.
 
 A live test would:
+
 1. Provision an ephemeral test cluster (`hetzner-k3s-test`,
    `CPX11` × 1 cp + 1 worker) on every PR to `bootstrap/cloud-init/`
    or `.github/workflows/infra-up.yml`.

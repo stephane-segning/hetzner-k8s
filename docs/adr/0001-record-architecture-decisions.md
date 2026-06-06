@@ -7,9 +7,8 @@ Accepted
 ## Context
 
 This repository operates a production k3s cluster on Hetzner Cloud. The
-operating model is unusual enough — GH-Actions-only control plane, deterministic
-node identities, etcd S3 snapshots, Hetzner-specific networking quirks — that
-operators returning to the codebase months later need to reconstruct *why*
+operating model is unusual enough — GH-Actions-only control plane, deterministic node identities, etcd S3 snapshots,
+Hetzner-specific networking quirks — that operators returning to the codebase months later need to reconstruct *why*
 specific choices were made, not just *what* they are.
 
 `DECISIONS.md` captures the high-level shape of those choices (server types,

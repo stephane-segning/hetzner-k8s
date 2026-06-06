@@ -55,7 +55,8 @@ Expected:
 - firewalls
 - API load balancer on `:6443`
 
-If the cluster was bootstrapped before the private `node-ip` fix, plan a node reprovision or k3s reinstall before validating Hetzner load balancers that use private node networking.
+If the cluster was bootstrapped before the private `node-ip` fix, plan a node reprovision or k3s reinstall before
+validating Hetzner load balancers that use private node networking.
 
 ### 3. Verify API DNS
 
@@ -80,7 +81,8 @@ Expected:
 
 ### 4a. Publish bootstrap kubeconfig for Platform Up
 
-If you want to use GitHub Actions for the post-bootstrap platform layer, base64-encode the bootstrap kubeconfig and store it in the GitHub secret:
+If you want to use GitHub Actions for the post-bootstrap platform layer, base64-encode the bootstrap kubeconfig and
+store it in the GitHub secret:
 
 - `REMOTE_CLUSTER_KUBECONFIG_B64`
 

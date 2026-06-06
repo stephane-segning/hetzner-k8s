@@ -62,56 +62,56 @@ using the unchanged `random_password.k3s_token` from remote Terraform state.
    typically `s3://<ETCD_S3_BUCKET>/<ETCD_S3_FOLDER>/<filename>`. Default
    folder is `<cluster_name>/etcd`.
 2. Trigger **Infra Up** in GH Actions with:
-   - `restore_from_s3 = true`
-   - `restore_snapshot_name = <filename>`
-   - `allow_control_plane_replacement = true` only if Terraform plans deletes
-     against existing control-plane resources still in state. A create-only
-     plan (state already has the CPs removed) does not require this.
+    - `restore_from_s3 = true`
+    - `restore_snapshot_name = <filename>`
+    - `allow_control_plane_replacement = true` only if Terraform plans deletes
+      against existing control-plane resources still in state. A create-only
+      plan (state already has the CPs removed) does not require this.
 
    The workflow's pre-flight step refuses to plan if any required ETCD_S3_*
    secret or snapshot name is missing, so the cluster will not boot into a
    broken half-restored state.
 3. The workflow's `Terraform plan` step probes the API LB and decides what
    to `-replace`:
-   - **First restore (API not reachable)**: `-replace` every non-bootstrap
-     control plane and every worker. The CPs must boot fresh (empty
-     `/var/lib/rancher/k3s/server/db/`) and join as new etcd members of the
-     restored cluster; the workers must drop any CA hash they pinned from a
-     prior cluster era.
-   - **Re-run against an already-restored cluster (API reachable)**: only
-     `-replace` the workers, leave the CPs intact. The sentinel on cp-1
-     skips the cluster-reset path, so a second restore-mode Infra Up would
-     otherwise destroy cp-2 + cp-3 simultaneously and break etcd quorum
-     (1 of 3 voters with no path back to a majority for adding new
-     members). Gating on API reachability prevents that trap.
+    - **First restore (API not reachable)**: `-replace` every non-bootstrap
+      control plane and every worker. The CPs must boot fresh (empty
+      `/var/lib/rancher/k3s/server/db/`) and join as new etcd members of the
+      restored cluster; the workers must drop any CA hash they pinned from a
+      prior cluster era.
+    - **Re-run against an already-restored cluster (API reachable)**: only
+      `-replace` the workers, leave the CPs intact. The sentinel on cp-1
+      skips the cluster-reset path, so a second restore-mode Infra Up would
+      otherwise destroy cp-2 + cp-3 simultaneously and break etcd quorum
+      (1 of 3 voters with no path back to a majority for adding new
+      members). Gating on API reachability prevents that trap.
 
    Failure modes the gate protects against:
-   - **Pinned worker CA** (`tls: failed to verify certificate: x509:
+    - **Pinned worker CA** (`tls: failed to verify certificate: x509:
      certificate signed by unknown authority`). Workers that joined an
-     empty cluster created by a prior failed restore have the wrong CA
-     fingerprint cached. Fresh worker VMs bootstrap k3s-agent against the
-     current API LB CA and join cleanly.
-   - **Etcd quorum loss on re-run**. Without the gate, every restore-mode
-     re-run would tear down cp-2 + cp-3 in parallel, leaving cp-1 unable
-     to write to etcd until the new members joined — which they couldn't,
-     because adding a member is itself a write requiring quorum. Recovery
-     from that state requires running `k3s server --cluster-reset` (no
-     restore path) on cp-1 manually.
+      empty cluster created by a prior failed restore have the wrong CA
+      fingerprint cached. Fresh worker VMs bootstrap k3s-agent against the
+      current API LB CA and join cleanly.
+    - **Etcd quorum loss on re-run**. Without the gate, every restore-mode
+      re-run would tear down cp-2 + cp-3 in parallel, leaving cp-1 unable
+      to write to etcd until the new members joined — which they couldn't,
+      because adding a member is itself a write requiring quorum. Recovery
+      from that state requires running `k3s server --cluster-reset` (no
+      restore path) on cp-1 manually.
 4. `control-plane-01` cloud-init:
-   - installs k3s with `INSTALL_K3S_SKIP_START=true` **and**
-     `INSTALL_K3S_SKIP_ENABLE=true` so a partial failure cannot be
-     "rescued" by systemd auto-starting an empty k3s on the next boot.
-   - downloads the snapshot from S3 with `mc` (a single static binary).
-   - pre-decompresses the snapshot via `unzip` and passes the absolute
-     path of the **uncompressed** file to `--cluster-reset-restore-path`.
-     This sidesteps a k3s 1.35.x bug in
-     [`pkg/etcd/snapshot.go::decompressSnapshot`](https://github.com/k3s-io/k3s/blob/master/pkg/etcd/snapshot.go)
-     where `filepath.Join(snapshotsDir, restorePath)` doubles the prefix
-     for absolute `.zip` paths. The non-`.zip` branch of `Restore` uses
-     the path verbatim.
-   - on success: writes `/var/lib/rancher/k3s/.recovery-restored` as an
-     idempotency sentinel (subsequent cloud-init runs skip the restore),
-     then `systemctl enable k3s && systemctl start k3s`.
+    - installs k3s with `INSTALL_K3S_SKIP_START=true` **and**
+      `INSTALL_K3S_SKIP_ENABLE=true` so a partial failure cannot be
+      "rescued" by systemd auto-starting an empty k3s on the next boot.
+    - downloads the snapshot from S3 with `mc` (a single static binary).
+    - pre-decompresses the snapshot via `unzip` and passes the absolute
+      path of the **uncompressed** file to `--cluster-reset-restore-path`.
+      This sidesteps a k3s 1.35.x bug in
+      [`pkg/etcd/snapshot.go::decompressSnapshot`](https://github.com/k3s-io/k3s/blob/master/pkg/etcd/snapshot.go)
+      where `filepath.Join(snapshotsDir, restorePath)` doubles the prefix
+      for absolute `.zip` paths. The non-`.zip` branch of `Restore` uses
+      the path verbatim.
+    - on success: writes `/var/lib/rancher/k3s/.recovery-restored` as an
+      idempotency sentinel (subsequent cloud-init runs skip the restore),
+      then `systemctl enable k3s && systemctl start k3s`.
 5. `control-plane-02` and `control-plane-03` cloud-init wait on
    `https://<bootstrap-private-ip>:6443/healthz` then join as additional
    servers. Workers reconnect with the unchanged token from remote state.
@@ -258,7 +258,8 @@ terraform -chdir=terraform/envs/prod apply \
 # Node will auto-join cluster
 ```
 
-Do not use Terraform `-replace` as a routine control-plane maintenance path in this repository. The current bootstrap contract makes control-plane replacement recovery-grade work, especially for the `--cluster-init` node.
+Do not use Terraform `-replace` as a routine control-plane maintenance path in this repository. The current bootstrap
+contract makes control-plane replacement recovery-grade work, especially for the `--cluster-init` node.
 
 ### Verify Etcd Backups
 
@@ -276,7 +277,8 @@ Supported workflow path:
 2. Run `Verify Etcd Backups` in GitHub Actions.
 3. Confirm that recent `s3://...` snapshots are present before any disruptive work.
 
-If a control-plane node must be rebuilt, treat it as deliberate recovery or cluster migration work backed by verified snapshots, not as a normal day-two operation.
+If a control-plane node must be rebuilt, treat it as deliberate recovery or cluster migration work backed by verified
+snapshots, not as a normal day-two operation.
 
 ## k3s Recovery
 
@@ -342,7 +344,8 @@ rm -rf /var/lib/rancher/k3s/server/db/
 systemctl start k3s
 ```
 
-To restore from S3, pass the snapshot filename and the S3 settings explicitly because the Kubernetes Secret is not available during restore:
+To restore from S3, pass the snapshot filename and the S3 settings explicitly because the Kubernetes Secret is not
+available during restore:
 
 ```bash
 k3s server \
@@ -412,7 +415,8 @@ kubectl get svc -n traefik traefik -o yaml | grep -A10 annotations
 kubectl rollout restart deployment traefik -n traefik
 ```
 
-If the Hetzner ingress load balancer exists but cannot reach Traefik, verify the nodes are advertising private addresses to Kubernetes.
+If the Hetzner ingress load balancer exists but cannot reach Traefik, verify the nodes are advertising private addresses
+to Kubernetes.
 
 ### Cilium Issues
 
@@ -455,8 +459,8 @@ For persistent volumes:
    ```
 
 3. **Recover from Hetzner**:
-   - Volumes persist in Hetzner Cloud Console
-   - Can be manually attached to nodes if needed
+    - Volumes persist in Hetzner Cloud Console
+    - Can be manually attached to nodes if needed
 
 ### Database Recovery
 
@@ -545,33 +549,33 @@ ssh root@$(terraform -chdir=terraform/envs/prod output -raw first_control_plane_
 If locked out of all nodes:
 
 1. **Use Hetzner Console**:
-   - Access via VNC console
-   - Reset root password if needed
+    - Access via VNC console
+    - Reset root password if needed
 
 2. **Reset firewall**:
-   - Temporarily allow all SSH in Hetzner Console
-   - Fix firewall rules via Terraform
+    - Temporarily allow all SSH in Hetzner Console
+    - Fix firewall rules via Terraform
 
 ## Prevention
 
 ### Recommended Practices
 
 1. **Regular backups**:
-   - etcd snapshots
-   - Database backups
-   - Volume snapshots
+    - etcd snapshots
+    - Database backups
+    - Volume snapshots
 
 2. **Monitoring**:
-   - Node health alerts
-   - Pod restart alerts
-   - Resource usage alerts
+    - Node health alerts
+    - Pod restart alerts
+    - Resource usage alerts
 
 3. **Documentation**:
-   - Keep record of changes
-   - Document custom configurations
-   - Maintain runbooks
+    - Keep record of changes
+    - Document custom configurations
+    - Maintain runbooks
 
 4. **Testing**:
-   - Periodic recovery drills
-   - Backup restoration tests
-   - Failover testing
+    - Periodic recovery drills
+    - Backup restoration tests
+    - Failover testing

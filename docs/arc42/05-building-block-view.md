@@ -50,12 +50,12 @@ flowchart TB
     loadbalancer -.->|target_server_ids| server
 ```
 
-| Module       | Resources                                                   | Notes                                            |
-|--------------|-------------------------------------------------------------|--------------------------------------------------|
-| network      | `hcloud_network`, `hcloud_network_subnet`                   | Private network `10.0.0.0/16`, single subnet     |
-| firewall     | `hcloud_firewall`                                           | Inbound SSH 22, ICMP. No public 80/443/6443      |
-| server       | `hcloud_server` per node, optional `hcloud_volume`          | for_each on `var.nodes`; embedded `network {}`   |
-| loadbalancer | `hcloud_load_balancer`, service, targets, network attach    | Used for API LB on `:6443`                       |
+| Module       | Resources                                                | Notes                                          |
+|--------------|----------------------------------------------------------|------------------------------------------------|
+| network      | `hcloud_network`, `hcloud_network_subnet`                | Private network `10.0.0.0/16`, single subnet   |
+| firewall     | `hcloud_firewall`                                        | Inbound SSH 22, ICMP. No public 80/443/6443    |
+| server       | `hcloud_server` per node, optional `hcloud_volume`       | for_each on `var.nodes`; embedded `network {}` |
+| loadbalancer | `hcloud_load_balancer`, service, targets, network attach | Used for API LB on `:6443`                     |
 
 The bootstrap CP key `control-plane-01` is special: its `user_data` has
 `initialize_cluster=true`, which inside the cloud-init template selects
@@ -108,13 +108,13 @@ flowchart TB
 
 ## 5.4 GH Actions workflows
 
-| Workflow                   | Trigger                                       | Purpose                                                                          |
-|----------------------------|-----------------------------------------------|----------------------------------------------------------------------------------|
-| `infra-up.yml`             | `workflow_dispatch`                           | Provision/refresh infra; optionally restore etcd from S3. Self-validates via `/livez` |
-| `infra-down.yml`           | `workflow_dispatch`                           | Power off servers (preserves disks + state)                                      |
-| `infra-destroy.yml`        | `workflow_dispatch` (guarded)                 | `terraform destroy`                                                              |
-| `platform-up.yml`          | `workflow_dispatch`                           | Install/upgrade Cilium, CCM, CSI, Traefik, base manifests                        |
-| `verify-etcd-backups.yml`  | `workflow_dispatch`                           | Confirm fresh S3 etcd snapshots exist                                            |
+| Workflow                  | Trigger                       | Purpose                                                                               |
+|---------------------------|-------------------------------|---------------------------------------------------------------------------------------|
+| `infra-up.yml`            | `workflow_dispatch`           | Provision/refresh infra; optionally restore etcd from S3. Self-validates via `/livez` |
+| `infra-down.yml`          | `workflow_dispatch`           | Power off servers (preserves disks + state)                                           |
+| `infra-destroy.yml`       | `workflow_dispatch` (guarded) | `terraform destroy`                                                                   |
+| `platform-up.yml`         | `workflow_dispatch`           | Install/upgrade Cilium, CCM, CSI, Traefik, base manifests                             |
+| `verify-etcd-backups.yml` | `workflow_dispatch`           | Confirm fresh S3 etcd snapshots exist                                                 |
 
 Each workflow uses Hetzner Object Storage as the Terraform S3 backend,
 reads the same set of `TF_VAR_*` env variables, and writes summaries to

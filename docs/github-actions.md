@@ -15,10 +15,12 @@ Set these repository or environment secrets:
 - `HCLOUD_TOKEN`: Hetzner Cloud API token
 - `TF_STATE_BUCKET`: Object Storage bucket name for Terraform state, for example `terraform-state`
 - `TF_STATE_KEY`: Object key for the production state file, for example `hetzner-k8s/prod.tfstate`
-- `TF_STATE_ENDPOINT`: Object Storage endpoint, for example `nbg1.your-objectstorage.com` or `https://nbg1.your-objectstorage.com`
+- `TF_STATE_ENDPOINT`: Object Storage endpoint, for example `nbg1.your-objectstorage.com` or
+  `https://nbg1.your-objectstorage.com`
 - `TF_STATE_ACCESS_KEY_ID`: Object Storage access key
 - `TF_STATE_SECRET_ACCESS_KEY`: Object Storage secret key
-- `REMOTE_CLUSTER_KUBECONFIG_B64`: base64-encoded bootstrap kubeconfig used only for the initial platform-install workflow
+- `REMOTE_CLUSTER_KUBECONFIG_B64`: base64-encoded bootstrap kubeconfig used only for the initial platform-install
+  workflow
 - `ETCD_S3_ACCESS_KEY_ID`: S3 access key for k3s etcd snapshot replication
 - `ETCD_S3_SECRET_ACCESS_KEY`: S3 secret key for k3s etcd snapshot replication
 - `ETCD_S3_BUCKET`: snapshot bucket if you prefer storing it as a secret
@@ -31,12 +33,15 @@ Set these repository or environment secrets:
 
 Important:
 
-- `TF_STATE_ACCESS_KEY_ID` and `TF_STATE_SECRET_ACCESS_KEY` are Object Storage credentials, not your Hetzner Cloud API token.
+- `TF_STATE_ACCESS_KEY_ID` and `TF_STATE_SECRET_ACCESS_KEY` are Object Storage credentials, not your Hetzner Cloud API
+  token.
 - `HCLOUD_TOKEN` is used for the Hetzner Cloud API.
-- `TF_STATE_ENDPOINT` must point to the Object Storage endpoint for your bucket region, for example `nbg1.your-objectstorage.com`.
+- `TF_STATE_ENDPOINT` must point to the Object Storage endpoint for your bucket region, for example
+  `nbg1.your-objectstorage.com`.
 - The workflows will add `https://` automatically if you omit it.
 - Using the same Hetzner Object Storage service for Terraform state and etcd snapshots is supported.
-- Keep etcd snapshot backups isolated from Terraform state with a separate bucket when possible, or at minimum a separate prefix and independent retention policy.
+- Keep etcd snapshot backups isolated from Terraform state with a separate bucket when possible, or at minimum a
+  separate prefix and independent retention policy.
 
 ### Creating `REMOTE_CLUSTER_KUBECONFIG_B64`
 
@@ -86,16 +91,19 @@ Set these as repository or environment variables:
 - `TF_OIDC_USERNAME_PREFIX`: defaults to `-`
 - `TF_OIDC_GROUPS_PREFIX`: defaults to empty string
 - `ETCD_S3_BUCKET`: bucket for etcd snapshots
-- `ETCD_S3_ENDPOINT`: S3 endpoint for etcd snapshots, for example `nbg1.your-objectstorage.com` or `https://nbg1.your-objectstorage.com`
+- `ETCD_S3_ENDPOINT`: S3 endpoint for etcd snapshots, for example `nbg1.your-objectstorage.com` or
+  `https://nbg1.your-objectstorage.com`
 - `ETCD_S3_REGION`: optional snapshot region, defaults to `eu-central`
 - `ETCD_S3_FOLDER`: optional snapshot folder/prefix, defaults to `<cluster-name>/etcd`
 - `ETCD_S3_RETENTION`: optional S3-side retention count, defaults to the local etcd retention setting
 - `ETCD_S3_BUCKET_LOOKUP_TYPE`: optional S3 lookup type, defaults to `path`
 
-The `Platform Up` workflow accepts the `ETCD_S3_*` settings from either GitHub Actions `secrets` or `vars`. Secrets take precedence when both are set.
+The `Platform Up` workflow accepts the `ETCD_S3_*` settings from either GitHub Actions `secrets` or `vars`. Secrets take
+precedence when both are set.
 The workflow will add `https://` to `ETCD_S3_ENDPOINT` automatically if you omit it.
 
-When `TF_ETCD_S3_ENABLED=true`, `Platform Up` will fail if the `ETCD_S3_*` settings required to build the k3s snapshot Secret are missing.
+When `TF_ETCD_S3_ENABLED=true`, `Platform Up` will fail if the `ETCD_S3_*` settings required to build the k3s snapshot
+Secret are missing.
 
 ## Workflows
 
@@ -133,7 +141,8 @@ Use this for:
 - normal infra changes
 - bringing the cluster back after `Infra Down`
 
-Do not use the normal `Infra Up` path for control-plane reprovisioning. In the current bootstrap model, control-plane replacement is recovery work, not a supported steady-state maintenance operation.
+Do not use the normal `Infra Up` path for control-plane reprovisioning. In the current bootstrap model, control-plane
+replacement is recovery work, not a supported steady-state maintenance operation.
 
 ### Infra Down
 
@@ -227,7 +236,11 @@ Use this for:
 - `Infra Down` is operationally different from `Infra Destroy`.
 - The API load balancer is Terraform-owned.
 - The Traefik ingress load balancer is Kubernetes/CCM-owned and must be cleaned up separately on destroy.
-- Node public IPs remain allocated for outbound connectivity, but inbound public access to the VMs is blocked by firewall policy.
-- If you add more CCM-managed services of type `LoadBalancer`, extend the destroy workflow so their Hetzner load balancers are deleted before Terraform destroy.
-- The workflows provision the cluster foundation. Full platform readiness still requires bootstrap validation and in-cluster platform sync.
-- `REMOTE_CLUSTER_KUBECONFIG_B64` is a bootstrap-only credential for the `Platform Up` workflow. After OIDC and Argo CD ServiceAccount access are established, treat it as transitional and rotate or remove it if you no longer need it.
+- Node public IPs remain allocated for outbound connectivity, but inbound public access to the VMs is blocked by
+  firewall policy.
+- If you add more CCM-managed services of type `LoadBalancer`, extend the destroy workflow so their Hetzner load
+  balancers are deleted before Terraform destroy.
+- The workflows provision the cluster foundation. Full platform readiness still requires bootstrap validation and
+  in-cluster platform sync.
+- `REMOTE_CLUSTER_KUBECONFIG_B64` is a bootstrap-only credential for the `Platform Up` workflow. After OIDC and Argo CD
+  ServiceAccount access are established, treat it as transitional and rotate or remove it if you no longer need it.

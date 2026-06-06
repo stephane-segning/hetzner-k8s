@@ -20,6 +20,7 @@ snapshots are intact in S3, when the operator triggers `Infra Up` with
   snapshot at the snapshot's timestamp.
 
 Measured indirectly via:
+
 - `Verify Etcd Backups` workflow (snapshot recency)
 - Manual `kubectl get pods -A | grep -vc Running` after Platform Up
 - Argo CD home cluster sync status

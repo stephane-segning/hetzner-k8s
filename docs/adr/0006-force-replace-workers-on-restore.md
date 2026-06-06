@@ -61,8 +61,8 @@ VMs. Their cloud-init runs fresh and `k3s-agent` installs against the
   next pod schedule.
 - Worker replacement runs in parallel with the (possibly conditional)
   non-bootstrap CP replacement (ADR-0007). Terraform parallelizes destroy
-  + create, so the worker churn does not extend the wall-clock time of a
-  restore.
+    + create, so the worker churn does not extend the wall-clock time of a
+      restore.
 - A routine (non-restore) Infra Up run does *not* replace workers. This
   flag is `restore_from_s3`-only, so day-two upgrades and config changes
   don't churn worker VMs.

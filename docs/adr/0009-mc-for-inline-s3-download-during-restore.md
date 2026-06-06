@@ -22,6 +22,7 @@ because the in-cluster `k3s-etcd-snapshot-s3-config` Secret lives in the
 very etcd we are restoring (chicken-and-egg).
 
 Tooling options considered:
+
 - `aws-cli` — heavy (Python runtime + ~30 MB), comes from apt
 - `s5cmd` — fast, single Go binary, but a less-common project
 - `mc` (MinIO Client) — single static Go binary, widely deployed, S3
