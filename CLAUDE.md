@@ -40,7 +40,7 @@ platform/base/            namespaces, hcloud/CSI Secrets, NetworkPolicies, clust
 platform/helm-values/     Cilium / CCM / CSI / Traefik values
 platform/argocd/          Argo CD Application manifests (reconciled from the home cluster)
 .github/workflows/        the five supported control-surface workflows
-tests/unit/ tests/render/ static checks invoked by `make test`
+tests/unit/ · tests/render/  static checks invoked by `make test`
 docs/                     adr/ · arc42/ · lessons-learned/ · caveats-and-traps.md · recovery.md
 DECISIONS.md AGENTS.md    macro design + operating-model constraints (read both)
 ```
@@ -98,7 +98,7 @@ Because of the iteration history (see `docs/lessons-learned/2026-05-cluster-rest
 3. **Pass `--node-ip` + `--advertise-address` to cluster-reset.** The cluster-reset process does NOT inherit them from the systemd unit. Without these, etcd records the public peer URL and the subsequent `k3s.service` start fails on member-list mismatch. (ADR-0011)
 4. **Pass `--etcd-s3=false` on cluster-reset CLI.** `/etc/rancher/k3s/config.yaml` has `etcd-s3: true` for ongoing snapshots. Cluster-reset merges that config in and re-enters the broken S3 code path unless CLI overrides. (ADR-0010)
 5. **The Infra Up workflow's `Terraform plan` step gates non-bootstrap CP `-replace` on API LB reachability.** Re-running restore against a healthy cluster MUST NOT destroy cp-2 + cp-3 in parallel — that breaks etcd quorum. Worker `-replace` is unconditional in restore mode because workers don't vote in etcd quorum and they need fresh CA pinning. (ADR-0006, ADR-0007)
-6. **A successful Infra Up means a *healthy* cluster, not just a reachable one.** Two gates run after apply: `Wait for Kubernetes API to become ready` polls `/livez` until 200/401/403 (ADR-0008), then `Verify all expected nodes are Ready` asserts the exact Terraform node set (`${cluster}-cp/worker-N`) is Ready with a **live kubelet Lease** — using the Lease, not the Ready condition's `lastHeartbeatTime`, because the latter can be ~5 min stale on a healthy node (ADR-0016). The node gate needs the `REMOTE_CLUSTER_KUBECONFIG_B64` secret (shared with Verify Etcd Backups); without it the run warns and skips rather than failing. It fails closed to Ready-enforcement except in a genuine pre-CNI bootstrap (no Cilium DaemonSet → registration-only).
+6. **A successful Infra Up means a *healthy* cluster, not just a reachable one.** Two gates run after apply: `Wait for Kubernetes API to become ready` polls `/livez` until 200/401/403 (ADR-0008), then `Verify all expected nodes are Ready` asserts the exact Terraform node set (`${cluster}-cp-N` / `${cluster}-worker-N`) is Ready with a **live kubelet Lease** — using the Lease, not the Ready condition's `lastHeartbeatTime`, because the latter can be ~5 min stale on a healthy node (ADR-0016). The node gate needs the `REMOTE_CLUSTER_KUBECONFIG_B64` secret (shared with Verify Etcd Backups); without it the run warns and skips rather than failing. It fails closed to Ready-enforcement except in a genuine pre-CNI bootstrap (no Cilium DaemonSet → registration-only).
 
 ## Where decisions are recorded
 
@@ -118,7 +118,7 @@ When opening a PR that touches `bootstrap/cloud-init/node.yaml` or `.github/work
 - Pinned k3s version is `v1.35.3+k3s1`. Several ADRs document workarounds for bugs specific to this version; revisit on upgrade.
 - The recovery flow downloads `mc` from `dl.min.io` at restore time. Don't replace that with `aws-cli` (heavier) or hand-rolled curl SigV4 (fragile) without a good reason.
 - Changes ship via small, focused PRs (split unrelated work). Two bots — **gemini-code-assist** and **chatgpt-codex-connector** (Codex) — auto-review every PR; address their comments before merge (Codex has caught real P1s here, often over *successive* rounds — re-check after each fix push, don't dismiss reflexively). The operator merges; PRs squash-merge, so rebase the next branch onto fresh `origin/main` afterward.
-- **Don't stack a PR on another PR's branch.** With squash-merge, when the base PR merges, the stacked PR silently merges into the now-deleted base branch instead of `main` and its changes never land. Branch each PR off `origin/main`; if two touch the same file, land the first, then cherry-pick the second onto fresh `main`.
+- **Don't stack a PR on another PR's branch.** A stacked PR targets that base branch, not `main` — merging it lands its changes on the base branch, so they silently never reach `main` (this swallowed the readiness-gate PR here; the base branch was not deleted, so GitHub did not auto-retarget it to `main`). Even when the base *is* deleted and GitHub retargets the stacked PR to `main`, squash-merging the base rewrote its commits under new hashes, so the stacked PR's diff is polluted by the original base commits — risking conflicts or duplicates. Branch each PR off `origin/main`; if two touch the same file, land the first, then cherry-pick the second onto fresh `main`.
 - There are no required CI status checks; the two review bots are advisory. Merging is the operator's call.
 
 ## Things to avoid
