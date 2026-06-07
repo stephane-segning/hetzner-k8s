@@ -10,11 +10,13 @@ The five supported workflows live in `.github/workflows/`:
 
 | Workflow                 | Purpose                                                                                          |
 |--------------------------|--------------------------------------------------------------------------------------------------|
-| `infra-up.yml`           | Provision/refresh infra; optionally restore etcd from S3. Self-validates via `/livez` before reporting success. |
+| `infra-up.yml`           | Provision/refresh infra; optionally restore etcd from S3 or force-replace specific nodes (`replace_nodes`). Self-validates (API `/livez` + all expected nodes Ready) before reporting success. |
 | `infra-down.yml`         | Power off servers (preserves disks + Terraform state)                                            |
 | `infra-destroy.yml`      | `terraform destroy` (guarded)                                                                    |
 | `platform-up.yml`        | Install/upgrade Cilium, Hetzner CCM/CSI, Traefik, base manifests, etcd-S3 Secret                |
 | `verify-etcd-backups.yml`| Confirm recent S3 etcd snapshots exist                                                           |
+
+To recover a single dead/wedged node (the routine, no-SSH way), run Infra Up with `replace_nodes=<key>` (e.g. `worker-3` or `worker-03`; comma/space-separated for several). It force-replaces only those VMs so cloud-init re-runs and they rejoin fresh; control-plane keys additionally require `allow_control_plane_replacement=true`. See `docs/recovery.md`.
 
 Constraints recorded in `AGENTS.md` that must shape any change:
 
@@ -24,6 +26,24 @@ Constraints recorded in `AGENTS.md` that must shape any change:
 - Argo CD lives in a **separate home cluster** and manages long-lived workloads in this one via GitOps. We don't run Argo CD here.
 - Keep Cilium as the CNI, swap disabled, k3s `local-storage` disabled, direct public node ingress closed, OIDC for humans + ServiceAccount tokens for automation. These are load-bearing.
 - Routine control-plane replacement is **not** a supported operation; it is recovery-grade work gated by `allow_control_plane_replacement` in the Infra Up inputs.
+
+## Repository layout
+
+```
+terraform/envs/prod/      Root Terraform composition (the only env). main.tf wires
+                          modules; locals.tf renders per-node cloud-init; vars.tf inputs.
+terraform/modules/        network · firewall · server · loadbalancer (reused for the API LB)
+bootstrap/cloud-init/     node.yaml — the single role-conditional cloud-init (see below)
+bootstrap/scripts/        break-glass: bootstrap.sh, install-platform.sh, get-kubeconfig.sh
+                          (install-platform.sh is also what platform-up.yml runs)
+platform/base/            namespaces, hcloud/CSI Secrets, NetworkPolicies, cluster-access
+platform/helm-values/     Cilium / CCM / CSI / Traefik values
+platform/argocd/          Argo CD Application manifests (reconciled from the home cluster)
+.github/workflows/        the five supported control-surface workflows
+tests/unit/ tests/render/ static checks invoked by `make test`
+docs/                     adr/ · arc42/ · lessons-learned/ · caveats-and-traps.md · recovery.md
+DECISIONS.md AGENTS.md    macro design + operating-model constraints (read both)
+```
 
 ## Common commands
 
@@ -42,7 +62,10 @@ terraform -chdir=terraform/envs/prod fmt -check -recursive
 ./tests/render/validate-all.sh      # full manifest + Terraform render validation
 ```
 
-Render validation must not produce persistent artifacts inside `terraform/envs/prod/` (AGENTS.md rule).
+There is no finer-grained "single test" runner — the suites are whole bash
+scripts; run the one you care about directly (e.g. `./tests/unit/test_scripts.sh`).
+Render validation must not produce persistent artifacts inside `terraform/envs/prod/`
+(AGENTS.md rule); use a `/tmp` scratch dir for ad-hoc `templatefile` rendering.
 
 ## Architecture: four layers, bottom-up
 
@@ -75,7 +98,7 @@ Because of the iteration history (see `docs/lessons-learned/2026-05-cluster-rest
 3. **Pass `--node-ip` + `--advertise-address` to cluster-reset.** The cluster-reset process does NOT inherit them from the systemd unit. Without these, etcd records the public peer URL and the subsequent `k3s.service` start fails on member-list mismatch. (ADR-0011)
 4. **Pass `--etcd-s3=false` on cluster-reset CLI.** `/etc/rancher/k3s/config.yaml` has `etcd-s3: true` for ongoing snapshots. Cluster-reset merges that config in and re-enters the broken S3 code path unless CLI overrides. (ADR-0010)
 5. **The Infra Up workflow's `Terraform plan` step gates non-bootstrap CP `-replace` on API LB reachability.** Re-running restore against a healthy cluster MUST NOT destroy cp-2 + cp-3 in parallel — that breaks etcd quorum. Worker `-replace` is unconditional in restore mode because workers don't vote in etcd quorum and they need fresh CA pinning. (ADR-0006, ADR-0007)
-6. **A successful Infra Up means a reachable cluster.** The `Wait for Kubernetes API to become ready` step polls `/livez` until 200/401/403 or fails the workflow loudly. (ADR-0008)
+6. **A successful Infra Up means a *healthy* cluster, not just a reachable one.** Two gates run after apply: `Wait for Kubernetes API to become ready` polls `/livez` until 200/401/403 (ADR-0008), then `Verify all expected nodes are Ready` asserts the exact Terraform node set (`${cluster}-cp/worker-N`) is Ready with a **live kubelet Lease** — using the Lease, not the Ready condition's `lastHeartbeatTime`, because the latter can be ~5 min stale on a healthy node (ADR-0016). The node gate needs the `REMOTE_CLUSTER_KUBECONFIG_B64` secret (shared with Verify Etcd Backups); without it the run warns and skips rather than failing. It fails closed to Ready-enforcement except in a genuine pre-CNI bootstrap (no Cilium DaemonSet → registration-only).
 
 ## Where decisions are recorded
 
@@ -94,6 +117,9 @@ When opening a PR that touches `bootstrap/cloud-init/node.yaml` or `.github/work
 - Terraform 1.9.x in the workflows; locally 1.6+ works for `validate`.
 - Pinned k3s version is `v1.35.3+k3s1`. Several ADRs document workarounds for bugs specific to this version; revisit on upgrade.
 - The recovery flow downloads `mc` from `dl.min.io` at restore time. Don't replace that with `aws-cli` (heavier) or hand-rolled curl SigV4 (fragile) without a good reason.
+- Changes ship via small, focused PRs (split unrelated work). Two bots — **gemini-code-assist** and **chatgpt-codex-connector** (Codex) — auto-review every PR; address their comments before merge (Codex has caught real P1s here, often over *successive* rounds — re-check after each fix push, don't dismiss reflexively). The operator merges; PRs squash-merge, so rebase the next branch onto fresh `origin/main` afterward.
+- **Don't stack a PR on another PR's branch.** With squash-merge, when the base PR merges, the stacked PR silently merges into the now-deleted base branch instead of `main` and its changes never land. Branch each PR off `origin/main`; if two touch the same file, land the first, then cherry-pick the second onto fresh `main`.
+- There are no required CI status checks; the two review bots are advisory. Merging is the operator's call.
 
 ## Things to avoid
 
