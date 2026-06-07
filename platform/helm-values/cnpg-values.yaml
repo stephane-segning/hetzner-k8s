@@ -1,3 +1,13 @@
+# Emit a PodMonitor for the operator's own controller-manager metrics
+# (:8080). The cluster's Alloy collector discovers PodMonitors cluster-wide and
+# scrapes it → the CloudNativePG Grafana dashboard's "Operator Namespace" picker
+# resolves to cnpg-system instead of latching onto unrelated controller-runtime
+# metrics. (The CNPG *Cluster* CRs already auto-create their own PodMonitors;
+# this covers the operator itself.) See ai-helm
+# docs/2026-06-07-observability-datasource-audit.md §9.
+monitoring:
+  podMonitorEnabled: true
+
 resources:
   requests:
     cpu: 100m
