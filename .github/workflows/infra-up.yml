@@ -362,6 +362,156 @@ jobs:
           } | tee -a "$GITHUB_STEP_SUMMARY"
           exit 1
 
+      - name: Verify all expected nodes are Ready
+        env:
+          REMOTE_CLUSTER_KUBECONFIG_B64: ${{ secrets.REMOTE_CLUSTER_KUBECONFIG_B64 }}
+          RESTORE_FROM_S3: ${{ inputs.restore_from_s3 && 'true' || 'false' }}
+        run: |
+          # The /livez gate above proves the API server answers on the LB,
+          # but says nothing about workers: a NotReady or never-joined worker
+          # sails past it and the run goes green on a degraded cluster. This
+          # step closes that gap by asserting that exactly the nodes Terraform
+          # manages — the deterministic ${cluster}-cp-N / ${cluster}-worker-N
+          # set — are present and have a LIVE, Ready kubelet.
+          #
+          # Authenticates with the same REMOTE_CLUSTER_KUBECONFIG_B64 secret
+          # the Verify Etcd Backups workflow uses. The cluster CA is preserved
+          # across restore (etcd snapshot holds it), so this kubeconfig stays
+          # valid through a restore; it is only stale after a from-scratch
+          # rebuild with a brand-new CA (break-glass, rare).
+          if [ -z "$REMOTE_CLUSTER_KUBECONFIG_B64" ]; then
+            {
+              echo "::warning::REMOTE_CLUSTER_KUBECONFIG_B64 not set — node-readiness gate skipped."
+              echo "Cannot verify nodes are Ready. Set the secret (same one Verify Etcd"
+              echo "Backups uses) to make Infra Up fail on a NotReady or missing node."
+            } | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # The set of nodes Terraform owns is deterministic from cluster_name
+          # and the counts (terraform/envs/prod/locals.tf:
+          # "%s-cp-%d" / "%s-worker-%d", 1-indexed). Checking this exact set —
+          # rather than "any N Ready nodes" — means a leftover Node object from
+          # a scale-down or replace cannot fill the count for a node that is
+          # actually missing or NotReady.
+          expected_names=()
+          for i in $(seq 1 "$TF_VAR_control_plane_count"); do expected_names+=("${TF_VAR_cluster_name}-cp-${i}"); done
+          for i in $(seq 1 "$TF_VAR_worker_count");        do expected_names+=("${TF_VAR_cluster_name}-worker-${i}"); done
+          expected_json=$(printf '%s\n' "${expected_names[@]}" | jq -R . | jq -s .)
+          EXPECTED=${#expected_names[@]}
+
+          printf '%s' "$REMOTE_CLUSTER_KUBECONFIG_B64" | base64 --decode > "$RUNNER_TEMP/kubeconfig"
+          chmod 600 "$RUNNER_TEMP/kubeconfig"
+          export KUBECONFIG="$RUNNER_TEMP/kubeconfig"
+
+          # kubectl's global --request-timeout defaults to 0 (no timeout), so a
+          # stale/blackholed endpoint (e.g. after an API LB or CA change) would
+          # block past DEADLINE — the loop only re-checks the clock once kubectl
+          # returns. Bound every call so we fail loudly with diagnostics instead.
+          KUBECTL="kubectl --request-timeout=15s"
+
+          # Fresh workers must apt-update/upgrade, install k3s, bring up the
+          # private NIC and join before they go Ready; allow restore extra slack.
+          if [ "$RESTORE_FROM_S3" = "true" ]; then
+            DEADLINE=$(( $(date +%s) + 900 ))   # 15 min
+          else
+            DEADLINE=$(( $(date +%s) + 600 ))   # 10 min
+          fi
+
+          # Liveness comes from the node Lease (kube-node-lease), NOT the Ready
+          # condition's lastHeartbeatTime: with NodeLease enabled the kubelet
+          # only re-posts an unchanged NodeStatus every nodeStatusReportFrequency
+          # (default 5m), so lastHeartbeatTime can be minutes stale on a perfectly
+          # healthy node. The Lease renewTime, by contrast, refreshes every ~10s.
+          # A node recreated by replace_nodes keeps its old Node object (same
+          # name) whose Lease stops renewing once the old kubelet dies — so a
+          # stale Ready=True cannot satisfy the gate before the new VM rejoins.
+          LEASE_FRESH=45
+
+          # On a from-scratch bootstrap the nodes start with
+          # --flannel-backend=none and stay NotReady until Platform Up installs
+          # Cilium. Detect whether a CNI is present, FAIL-CLOSED: only a definite
+          # "NotFound" flips to pre-CNI mode; transient/RBAC errors keep Ready
+          # enforcement on, so a routine cluster cannot silently degrade to a
+          # registration-only check. When genuinely absent, degrade so this gate
+          # does not deadlock the supported pre-CNI window.
+          cni_present=true
+          for _ in 1 2 3; do
+            cni_out=$($KUBECTL -n kube-system get daemonset cilium -o name 2>&1) && { cni_present=true; break; }
+            if printf '%s' "$cni_out" | grep -qiE 'not ?found'; then cni_present=false; break; fi
+            cni_present=true   # ambiguous error -> fail closed (enforce Ready)
+            sleep 5
+          done
+          [ "$cni_present" = "true" ] || echo "::warning::No Cilium DaemonSet found; cluster appears pre-CNI. Enforcing node registration only, not Ready (run Platform Up to install Cilium)."
+
+          present=0; ok=0; bad=""
+          while [ "$(date +%s)" -lt "$DEADLINE" ]; do
+            now=$(date -u +%s)
+            nodes_json=$($KUBECTL get nodes -o json 2>/dev/null) || nodes_json=""
+            leases_json=$($KUBECTL -n kube-node-lease get leases -o json 2>/dev/null) || leases_json='{"items":[]}'
+            if [ -n "$nodes_json" ]; then
+              summary=$(jq -nc \
+                --argjson nodes "$nodes_json" \
+                --argjson leases "$leases_json" \
+                --argjson expected "$expected_json" \
+                --argjson now "$now" \
+                --argjson fresh "$LEASE_FRESH" '
+                ($nodes.items  | map({(.metadata.name): (any(.status.conditions[]?; .type=="Ready" and .status=="True"))}) | add // {}) as $ready |
+                ($leases.items | map({(.metadata.name): .spec.renewTime}) | add // {}) as $renew |
+                [ $expected[] | . as $n
+                  | (($renew[$n] // null) as $r
+                     | $r != null and (((($r[0:19])+"Z") | fromdateiso8601) > ($now - $fresh))) as $live
+                  | { name: $n, present: ($ready|has($n)), ready: ($ready[$n] // false), live: $live }
+                ] as $rows |
+                { present: ([$rows[]|select(.present)]|length),
+                  ok:      ([$rows[]|select(.ready and .live)]|length),
+                  bad:     ([$rows[]|select((.ready and .live)|not)|"\(.name)(present=\(.present),ready=\(.ready),live=\(.live))"] | join(" ")) }')
+              present=$(printf '%s' "$summary" | jq -r '.present')
+              ok=$(printf '%s' "$summary" | jq -r '.ok')
+              bad=$(printf '%s' "$summary" | jq -r '.bad')
+
+              if [ "$cni_present" != "true" ]; then
+                # Pre-CNI: nodes can't be Ready without a CNI; assert the exact
+                # expected set at least registered.
+                if [ "$present" -eq "$EXPECTED" ]; then
+                  {
+                    echo "All $EXPECTED expected nodes are registered."
+                    echo "CNI not installed yet — Ready not enforced. Run Platform Up to install Cilium."
+                  } | tee -a "$GITHUB_STEP_SUMMARY"
+                  $KUBECTL get nodes -o wide >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+                  exit 0
+                fi
+                echo "$(date -u '+%H:%M:%SZ') pre-CNI: registered=$present/$EXPECTED (waiting: $bad)"
+              else
+                if [ "$ok" -eq "$EXPECTED" ]; then
+                  echo "All $EXPECTED expected nodes are Ready with a live kubelet lease." | tee -a "$GITHUB_STEP_SUMMARY"
+                  $KUBECTL get nodes -o wide >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+                  exit 0
+                fi
+                echo "$(date -u '+%H:%M:%SZ') ready+live=$ok/$EXPECTED (waiting: $bad)"
+              fi
+            else
+              echo "$(date -u '+%H:%M:%SZ') kubectl get nodes failed (API/kubeconfig not ready yet)"
+            fi
+            sleep 15
+          done
+
+          {
+            if [ "$cni_present" != "true" ]; then
+              echo "Node-registration gate FAILED: $present/$EXPECTED expected nodes registered (pre-CNI mode)."
+            else
+              echo "Node-readiness gate FAILED: $ok/$EXPECTED expected nodes Ready with a live lease."
+            fi
+            echo "Not satisfied: $bad"
+            echo
+            $KUBECTL get nodes -o wide 2>&1 || echo "(kubectl get nodes failed; kubeconfig may be stale after a CA change)"
+            echo
+            echo "A node is NotReady or never joined. Recover it through the supported path —"
+            echo "re-run Infra Up with replace_nodes=<key> (e.g. worker-03) — then re-run."
+            echo "See docs/recovery.md > Recover a wedged / NotReady node."
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          exit 1
+
       - name: Show endpoint summary
         run: |
           echo "API endpoint: $(terraform -chdir="$TF_DIR" output -raw api_server_endpoint)" >> "$GITHUB_STEP_SUMMARY"
