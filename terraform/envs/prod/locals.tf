@@ -70,6 +70,14 @@ locals {
         initialize_cluster = index == 0
         node_private_ip    = cidrhost(module.network.subnet_ip_range, 10 + index)
         node_password      = random_password.node_password[format("control-plane-%02d", index + 1)].result
+        # Peer control-plane private IPs (excluding self). The bootstrap node's
+        # cloud-init probes these before --cluster-init: if a peer already serves
+        # the cluster, it JOINS instead of forming a divergent etcd (split-brain
+        # guard for a rebuilt cluster-init node).
+        control_plane_peer_ips = join(" ", [
+          for i in range(var.control_plane_count) :
+          cidrhost(module.network.subnet_ip_range, 10 + i) if i != index
+        ])
       }))
       labels = {
         node_pool = "control-plane"
@@ -88,6 +96,8 @@ locals {
         initialize_cluster = false
         node_private_ip    = cidrhost(module.network.subnet_ip_range, 20 + index)
         node_password      = random_password.node_password[format("worker-%02d", index + 1)].result
+        # Unused on workers, but templatefile() requires every referenced var.
+        control_plane_peer_ips = ""
       }))
       labels = {
         node_pool = "worker"
