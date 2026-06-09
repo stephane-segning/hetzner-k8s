@@ -73,3 +73,15 @@ variable "health_check_path" {
   type        = string
   default     = null
 }
+
+variable "health_check_tls" {
+  description = "Use TLS for an HTTP health check (e.g. probing an HTTPS :6443 apiserver)."
+  type        = bool
+  default     = false
+}
+
+variable "health_check_status_codes" {
+  description = "HTTP status codes considered healthy. Patterns like \"2??\" or specific codes like \"401\"."
+  type        = list(string)
+  default     = ["2??", "3??"]
+}
