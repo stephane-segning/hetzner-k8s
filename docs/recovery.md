@@ -196,9 +196,14 @@ ssh -J root@<public-cp> root@10.0.0.10
 # --- on 10.0.0.10 ---
 systemctl stop k3s 2>/dev/null
 mv /var/lib/rancher/k3s/server/db /var/lib/rancher/k3s/server/db.splitbrain-bak-$(date +%s)
-# swap init -> join (point at any surviving CP; here 10.0.0.11):
-sed -i 's|--cluster-init|--server https://10.0.0.11:6443|g' /etc/systemd/system/k3s.service
-grep -c -- '--cluster-init' /etc/systemd/system/k3s.service   # MUST print 0 BEFORE starting
+# swap init -> join (point at any surviving CP; here 10.0.0.11).
+# NOTE the '=' form: the k3s.service file stores each flag as its own quoted
+# token ('--cluster-init'), so '--server=URL' must stay a SINGLE token —
+# '--server URL' (with a space) would become one bogus arg and k3s won't join.
+sed -i 's|--cluster-init|--server=https://10.0.0.11:6443|g' /etc/systemd/system/k3s.service
+# Gate startup: abort if any --cluster-init survived (grep -c's exit status
+# tracks match-found, not the count, so test explicitly):
+grep -q -- '--cluster-init' /etc/systemd/system/k3s.service && { echo "ABORT: --cluster-init still present — fix before starting"; exit 1; }
 systemctl daemon-reload && systemctl enable --now k3s
 ```
 

@@ -81,11 +81,16 @@ letting it finally come up as its own cluster → the split-brain.
    start:
 
    ```sh
+   # --- all run ON cp-1 (10.0.0.10), inside the SSH session ---
    mv /var/lib/rancher/k3s/server/db /var/lib/rancher/k3s/server/db.splitbrain-bak-$(date +%s)
-   sed -i 's|--cluster-init|--server https://10.0.0.11:6443|g' /etc/systemd/system/k3s.service
-   grep -c -- '--cluster-init' /etc/systemd/system/k3s.service   # MUST be 0 before start
+   sed -i 's|--cluster-init|--server=https://10.0.0.11:6443|g' /etc/systemd/system/k3s.service
+   grep -q -- '--cluster-init' /etc/systemd/system/k3s.service && { echo ABORT; exit 1; }
    systemctl daemon-reload && systemctl enable --now k3s
    ```
+
+   (The `--server=URL` `=`-form keeps it a single service-file token, and the
+   `grep -q … && exit 1` actually blocks startup if the swap failed — see the
+   canonical runbook `docs/recovery.md → Control-Plane Split-Brain`.)
 
    cp-1 joined as an etcd **learner → promoted** member (`cluster-id` matched the
    real cluster); quorum back to 3.
