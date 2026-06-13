@@ -43,9 +43,10 @@ resource "hcloud_load_balancer_service" "main" {
     dynamic "http" {
       for_each = contains(["http", "https"], var.health_check_protocol) ? [1] : []
       content {
-        path     = coalesce(var.health_check_path, "/")
-        domain   = ""
-        response = ""
+        path         = coalesce(var.health_check_path, "/")
+        domain       = ""
+        tls          = var.health_check_tls
+        status_codes = var.health_check_status_codes
       }
     }
   }

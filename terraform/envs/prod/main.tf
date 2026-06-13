@@ -63,10 +63,21 @@ module "api_load_balancer" {
   labels = merge(local.labels, {
     role = "kubernetes-api"
   })
-  use_private_ip        = true
-  service_protocol      = "tcp"
-  listen_port           = 6443
-  destination_port      = 6443
-  health_check_protocol = "tcp"
-  health_check_port     = 6443
+  use_private_ip   = true
+  service_protocol = "tcp"
+  listen_port      = 6443
+  destination_port = 6443
+  # HTTPS /readyz health check (was TCP-only). A TCP probe only proves the port
+  # is open — a crash-looping or divergent (split-brain) apiserver can pass it
+  # and keep getting traffic. Probing /readyz over TLS proves the apiserver HTTP
+  # layer is actually serving. The k3s apiserver requires auth even for /readyz,
+  # so an unauthenticated probe returns 401 when UP (and nothing when down), so
+  # 401 is accepted as healthy alongside 2xx.
+  # NOTE: validate before apply — confirm a healthy CP returns 401 (not 5xx) to
+  # `curl -ksi https://<cp>:6443/readyz` so the LB doesn't eject all backends.
+  health_check_protocol     = "http"
+  health_check_port         = 6443
+  health_check_path         = "/readyz"
+  health_check_tls          = true
+  health_check_status_codes = ["2??", "401"]
 }
