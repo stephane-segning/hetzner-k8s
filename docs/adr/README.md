@@ -27,6 +27,8 @@ including the painful ones learned the hard way.
 | 0013  | [Ignore `user_data` drift; roll cloud-init out via `-replace`](0013-ignore-user-data-changes.md) | Accepted |
 | 0014  | [Exclude control planes from external LoadBalancer target pools](0014-exclude-control-planes-from-external-lb-targets.md) | Accepted |
 | 0015  | [Disable k3s's bundled metrics-server (platform GitOps owns it)](0015-disable-bundled-metrics-server.md) | Accepted |
+| 0016  | [Infra Up verifies node readiness, not just API `/livez`](0016-infra-up-node-readiness-gate.md) | Accepted |
+| 0017  | [Guard against control-plane split-brain (bootstrap join-not-init + `/readyz` LB health check)](0017-guard-against-control-plane-split-brain.md) | Accepted |
 
 ## Template
 

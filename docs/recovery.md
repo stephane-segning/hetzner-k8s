@@ -142,6 +142,67 @@ which is already in `user_data`. After recovery, rotate the S3 credentials if
 your threat model requires it, and re-run Platform Up to update the
 `k3s-etcd-snapshot-s3-config` Secret.
 
+## Control-Plane Split-Brain
+
+**Symptom:** consecutive `kubectl get nodes` (through the API LB) return
+**different node sets** — e.g. one call shows only `cp-1`, the next shows
+`cp-2`/`cp-3` + workers but not `cp-1`. `/readyz` flaps `ok` ↔ `apiserver not
+ready`. This means a control plane (almost always the `--cluster-init` bootstrap
+node, `cp-1`/`10.0.0.10`) is running a **divergent etcd cluster** and the API LB
+is serving it alongside the real one. See
+`docs/lessons-learned/2026-06-09-cp1-split-brain.md` and ADR-0017.
+
+> Caused by a rebuilt cluster-init node re-running `--cluster-init` (founds a new
+> single-node etcd) instead of joining. ADR-0017's bootstrap guard prevents this
+> going forward; this runbook recovers a cluster already in the state.
+
+### 1. Identify the divergent node
+
+External IPs in `kubectl get nodes -o wide` may be stale (CCM mis-report) — trust
+SSH `hostname`. The laptop has **no route** to `10.0.0.0/24`; reach a node's
+private IP by hopping through a public IP: `ssh -J root@<public-cp> root@10.0.0.x`.
+
+```sh
+# A node whose OWN apiserver sees only itself is the divergent one:
+ssh -J root@<public-cp> root@10.0.0.10 'k3s kubectl get nodes --no-headers | wc -l'
+# 1  -> divergent (running its own cluster)   |   N -> part of the real cluster
+```
+
+### 2. Stop the split-brain (immediate)
+
+Stop + disable k3s on the divergent node. Its `:6443` closes and the LB ejects
+it within one health-check interval; the API goes consistent again. The real
+cluster (the other CPs) is untouched.
+
+```sh
+ssh -J root@<public-cp> root@10.0.0.10 'systemctl stop k3s && systemctl disable k3s'
+# verify: repeated `kubectl get nodes` are now identical; `kubectl get --raw=/readyz` == ok
+```
+
+### 3. Rejoin the node to the real cluster
+
+Park its divergent etcd db and switch it from init to **join** mode. The cluster
+token already matches across CPs (`/var/lib/rancher/k3s/server/token`).
+
+```sh
+ssh -J root@<public-cp> root@10.0.0.10
+  systemctl stop k3s 2>/dev/null
+  mv /var/lib/rancher/k3s/server/db /var/lib/rancher/k3s/server/db.splitbrain-bak-$(date +%s)
+  # edit /etc/systemd/system/k3s.service:  '--cluster-init'  ->  '--server' 'https://10.0.0.11:6443'
+  grep -c -- '--cluster-init' /etc/systemd/system/k3s.service   # MUST print 0 BEFORE starting
+  systemctl daemon-reload && systemctl enable --now k3s
+```
+
+The node joins the surviving etcd as a **learner → promoted** member. Verify:
+its own `k3s kubectl get nodes` now lists **all** nodes; etcd quorum is back to 3.
+
+> ⚠️ **Both steps are mandatory, in order.** Wiping the db **without** the
+> `--cluster-init`→`--server` swap is exactly what *creates* the split-brain (the
+> node re-inits). The `grep -c -- '--cluster-init' == 0` check gates the start.
+>
+> ⚠️ Do **not** automate this. Run it live, step by step — an unattended run is
+> what caused the 2026-06-09 incident.
+
 ## Node Recovery
 
 ### Node `NotReady` after reboot / replace / restore — node-password rejected
