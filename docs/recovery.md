@@ -184,13 +184,22 @@ ssh -J root@<public-cp> root@10.0.0.10 'systemctl stop k3s && systemctl disable 
 Park its divergent etcd db and switch it from init to **join** mode. The cluster
 token already matches across CPs (`/var/lib/rancher/k3s/server/token`).
 
+SSH **into** the divergent node first — these commands run **on the node**, not
+on the laptop (the `ssh -J` line is interactive; don't paste it together with the
+block below or the rest leaks to your local shell):
+
 ```sh
 ssh -J root@<public-cp> root@10.0.0.10
-  systemctl stop k3s 2>/dev/null
-  mv /var/lib/rancher/k3s/server/db /var/lib/rancher/k3s/server/db.splitbrain-bak-$(date +%s)
-  # edit /etc/systemd/system/k3s.service:  '--cluster-init'  ->  '--server' 'https://10.0.0.11:6443'
-  grep -c -- '--cluster-init' /etc/systemd/system/k3s.service   # MUST print 0 BEFORE starting
-  systemctl daemon-reload && systemctl enable --now k3s
+```
+
+```sh
+# --- on 10.0.0.10 ---
+systemctl stop k3s 2>/dev/null
+mv /var/lib/rancher/k3s/server/db /var/lib/rancher/k3s/server/db.splitbrain-bak-$(date +%s)
+# swap init -> join (point at any surviving CP; here 10.0.0.11):
+sed -i 's|--cluster-init|--server https://10.0.0.11:6443|g' /etc/systemd/system/k3s.service
+grep -c -- '--cluster-init' /etc/systemd/system/k3s.service   # MUST print 0 BEFORE starting
+systemctl daemon-reload && systemctl enable --now k3s
 ```
 
 The node joins the surviving etcd as a **learner → promoted** member. Verify:

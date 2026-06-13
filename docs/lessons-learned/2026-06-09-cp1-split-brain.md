@@ -82,7 +82,7 @@ letting it finally come up as its own cluster → the split-brain.
 
    ```sh
    mv /var/lib/rancher/k3s/server/db /var/lib/rancher/k3s/server/db.splitbrain-bak-$(date +%s)
-   #   edit /etc/systemd/system/k3s.service:  --cluster-init  →  --server https://10.0.0.11:6443
+   sed -i 's|--cluster-init|--server https://10.0.0.11:6443|g' /etc/systemd/system/k3s.service
    grep -c -- '--cluster-init' /etc/systemd/system/k3s.service   # MUST be 0 before start
    systemctl daemon-reload && systemctl enable --now k3s
    ```
