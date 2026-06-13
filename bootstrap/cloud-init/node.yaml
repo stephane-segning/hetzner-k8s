@@ -377,15 +377,22 @@ write_files:
           # LB (exactly the split-brain we hit when cp-1 was reprovisioned).
           # Probe the peer control-planes; only --cluster-init when NONE answer
           # (a genuinely fresh cluster — first ever bring-up).
+          # Guard the loop: a single-CP cluster renders control_plane_peer_ips
+          # empty, which would make `for PEER_CP in ; do` a bash syntax error and
+          # fail bootstrap. Use plain `if` blocks (not `&&`) under `set -e`.
           K3S_CLUSTER_FLAG="--cluster-init"
-          for PEER_CP in ${control_plane_peer_ips}; do
-              if curl -sk --max-time 5 "https://$PEER_CP:6443/healthz" >/dev/null 2>&1; then
-                  log "Existing cluster detected at $PEER_CP; JOINING instead of --cluster-init (split-brain guard)"
-                  K3S_CLUSTER_FLAG="--server https://$PEER_CP:6443"
-                  break
-              fi
-          done
-          [ "$K3S_CLUSTER_FLAG" = "--cluster-init" ] && log "No existing cluster detected; initializing bootstrap control-plane"
+          if [ -n "${control_plane_peer_ips}" ]; then
+              for PEER_CP in ${control_plane_peer_ips}; do
+                  if curl -sk --max-time 5 "https://$PEER_CP:6443/healthz" >/dev/null 2>&1; then
+                      log "Existing cluster detected at $PEER_CP; JOINING instead of --cluster-init (split-brain guard)"
+                      K3S_CLUSTER_FLAG="--server https://$PEER_CP:6443"
+                      break
+                  fi
+              done
+          fi
+          if [ "$K3S_CLUSTER_FLAG" = "--cluster-init" ]; then
+              log "No existing cluster detected; initializing bootstrap control-plane"
+          fi
           curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server" sh -s - \
             --token "$K3S_TOKEN" \
             $K3S_CLUSTER_FLAG \
