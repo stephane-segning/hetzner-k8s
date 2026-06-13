@@ -209,6 +209,15 @@ This document records key decisions made during the design of this platform.
 - Avoids direct public access to individual control-plane nodes
 - Keeps Kubernetes API exposure separate from in-cluster ingress ownership
 
+**Health check**: HTTPS `GET /readyz` (not bare TCP) — ADR-0017. A TCP-open
+`:6443` doesn't prove the apiserver is serving, so the LB used to keep routing to
+a crash-looping or **divergent (split-brain)** apiserver. The k3s apiserver
+auth-gates `/readyz`, so the probe accepts `401` (UP) alongside `2xx`
+(`status_codes = ["2??","401"]`, `tls = true`). The LB targets all control
+planes by design (ADR-0014); the **bootstrap split-brain guard** (ADR-0017) is
+what stops a rebuilt cluster-init node from founding a divergent cluster in the
+first place. See `docs/lessons-learned/2026-06-09-cp1-split-brain.md`.
+
 ### Node Public Exposure: Denied
 
 **Decision**: Do not allow public ingress to individual VMs

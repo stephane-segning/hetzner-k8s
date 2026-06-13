@@ -11,3 +11,4 @@ discoveries near the artifacts they produced.
 |------------|------------------------------------------------------------------------------------------------------------|
 | 2026-05    | [Cluster restore from S3 — 10 PRs, six bugs, and what to do differently](2026-05-cluster-restore.md)       |
 | 2026-06-02 | [All workers NotReady after reboot: node-password rejection](2026-06-02-worker-node-password-rejection.md) |
+| 2026-06-09 | [Control-plane split-brain: a rebuilt cp-1 founded its own cluster](2026-06-09-cp1-split-brain.md)         |
