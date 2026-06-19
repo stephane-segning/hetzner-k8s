@@ -74,7 +74,7 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_STATE_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: eu-central
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Validate restore inputs
         if: ${{ inputs.restore_from_s3 }}
