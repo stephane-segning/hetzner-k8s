@@ -379,8 +379,13 @@ first place. See `docs/lessons-learned/2026-06-09-cp1-split-brain.md`.
 
 **Implementation**:
 
-- Remote cluster registered to home Argo CD
-- Application manifests in `platform/argocd/`
+- Remote cluster registered to home Argo CD as destination **`home-remote`**
+- **Application manifests live in the home cluster's own GitOps repos, NOT
+  here.** This repo previously carried `platform/argocd/applications.yaml`
+  describing a `hetzner-helm` ApplicationSet; it was verified on 2026-07-25
+  that no such ApplicationSet exists and that **zero** of the 175 Argo
+  Applications reference this repo. The file was deleted rather than left to
+  mislead (**ADR-0020**).
 - Home Argo CD should use a dedicated ServiceAccount token and CA data, not the static admin kubeconfig
 
 ### Human Cluster Access: OIDC via Keycloak
