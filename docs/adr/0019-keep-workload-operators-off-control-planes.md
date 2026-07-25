@@ -22,7 +22,7 @@ Measured footprint at the time:
 | Pod | Node | Memory | Chart owned by |
 |---|---|---|---|
 | `hcloud-csi-controller` | cp-3 | **222 MiB** | this repo |
-| `cnpg-cloudnative-pg` | cp-3 | 87 MiB | this repo (but see drift note) |
+| `cnpg-cloudnative-pg` | cp-3 | 87 MiB | **not this repo** — see below |
 | `external-secrets` (+webhook) | cp-2 | 191 MiB | elsewhere |
 | `cert-manager` cainjector + webhook | cp-2 | 176 MiB | elsewhere |
 | `opentelemetry-operator` | cp-2 | 83 MiB | elsewhere |
@@ -67,11 +67,26 @@ taint; everything else does not.*
 - ⚠️ **Out of scope here:** `external-secrets`, `cert-manager`, and
   `opentelemetry-operator` (~450 MiB combined) are not managed from this repo.
   Their tolerations must be fixed wherever their Argo Application lives.
-- ⚠️ **Known drift discovered while writing this ADR:**
-  `platform/helm-values/cnpg-values.yaml` already declares `tolerations: []`,
-  `resources.requests.memory: 256Mi`, and `monitoring.podMonitorEnabled:
-  true` — but the *live* cnpg operator runs `requests 100Mi / limits 200Mi`,
-  has the control-plane toleration, and has **no PodMonitor**. That means this
-  values file is **not being applied** (the `cnpg` Argo Application is not
-  syncing it). Fixing cnpg's placement requires fixing that sync first;
-  editing the values file alone changes nothing.
+- 🧨 **cnpg cannot be fixed from this repo, and neither can three other
+  values files.** `platform/helm-values/cnpg-values.yaml` declares
+  `tolerations: []`, `resources.requests.memory: 256Mi`, and
+  `monitoring.podMonitorEnabled: true`, while the live operator runs
+  `requests 100Mi / limits 200Mi`, keeps the control-plane toleration, and has
+  no PodMonitor.
+
+  This is **not a failed sync** — there is no link at all. Verified against the
+  home cluster's Argo CD on 2026-07-25:
+
+  - the live `cnpg` Application is owned by a parent app **`cd-database`**
+    (project `infrastructure`, destination `home-remote`) and carries its
+    values **inline** as `helm.valuesObject` — the exact 100Mi/200Mi +
+    control-plane toleration observed on the cluster;
+  - the `hetzner-helm` and `hetzner-platform` ApplicationSets declared in
+    `platform/argocd/applications.yaml` **do not exist** (`NotFound`);
+  - **zero** of the 175 Argo Applications reference the `hetzner-k8s` repo.
+
+  So cnpg's placement must be fixed in the repo that defines the `cd-database`
+  app, by editing its `valuesObject`. Editing `cnpg-values.yaml` changes
+  nothing, because nothing reads it. The same applies to `redis-values.yaml`,
+  `alloy-values.yaml`, and `kube-state-metrics-values.yaml`. Tracked
+  separately as a repo-vs-reality reconciliation.
