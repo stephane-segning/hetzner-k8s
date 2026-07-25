@@ -221,17 +221,10 @@ install_ccm_and_csi() {
     kubectl rollout status daemonset/hcloud-csi-node -n kube-system --timeout=10m
 }
 
-install_traefik() {
-    log "Installing Traefik"
-    helm repo add traefik https://traefik.github.io/charts >/dev/null 2>&1 || true
-    helm repo update >/dev/null 2>&1
-    helm upgrade --install traefik traefik/traefik \
-        --namespace traefik \
-        --create-namespace \
-        --values "$PROJECT_ROOT/platform/helm-values/traefik-values.yaml"
-
-    kubectl rollout status deployment/traefik -n traefik --timeout=10m
-}
+# NOTE: Traefik is deliberately NOT installed here (ADR-0020).
+# The home cluster's Argo CD owns it via the `traefik-remote` Application.
+# This script used to `helm upgrade --install traefik`, which put Helm and Argo
+# in a fight over the same release. Do not reintroduce it.
 
 apply_cluster_basics() {
     log "Applying cluster access and NetworkPolicies"
@@ -249,8 +242,8 @@ show_summary() {
     kubectl get pods -A
     echo
     log "Next checks:"
-    log "  kubectl get svc -n traefik"
     log "  kubectl get storageclass"
+    log "  kubectl get svc -n traefik   # Traefik is owned by home-cluster Argo (ADR-0020)"
     log "  kubectl -n platform get secret argocd-manager-token"
 }
 
@@ -263,7 +256,6 @@ main() {
     apply_hetzner_secrets
     apply_etcd_snapshot_s3_secret
     install_ccm_and_csi
-    install_traefik
     apply_cluster_basics
     show_summary
 }

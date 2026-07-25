@@ -238,11 +238,19 @@ The default production posture is that embedded-etcd snapshots are replicated to
 
 Routine Terraform-driven control-plane replacement is not a supported steady-state operation in the current bootstrap model. Treat control-plane replacement as deliberate recovery or migration work, and verify S3-backed etcd snapshots before any disruptive maintenance.
 
-## Next Steps
+## What this repo does and does NOT own
 
-1. Point home-cluster Argo CD to this repository
-2. Apply `platform/argocd/` Application manifests
-3. Deploy workloads via GitOps
+This repo owns **infrastructure + the bootstrap platform layer only**:
+Terraform (network, firewall, servers, API LB, worker volumes) and the three
+Helm charts `install-platform.sh` installs — **Cilium, Hetzner CCM, Hetzner
+CSI** — plus `platform/base/` manifests.
+
+Everything else running in the cluster (Traefik, cnpg, Redis, Alloy,
+kube-state-metrics, Longhorn, the NVIDIA device plugin, and ~100 workload
+Applications) is owned by **Argo CD in the separate home cluster**, defined in
+other repositories with inline Helm values. This repo cannot change them.
+
+See **ADR-0020** for the verified ownership map and how it was established.
 
 ## Existing Cluster Note
 

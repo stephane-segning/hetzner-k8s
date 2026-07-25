@@ -38,7 +38,8 @@ bootstrap/scripts/        break-glass: bootstrap.sh, install-platform.sh, get-ku
                           (install-platform.sh is also what platform-up.yml runs)
 platform/base/            namespaces, hcloud/CSI Secrets, NetworkPolicies, cluster-access
 platform/helm-values/     Cilium / CCM / CSI / Traefik values
-platform/argocd/          Argo CD Application manifests (reconciled from the home cluster)
+                          (no platform/argocd/ — Argo Applications live in the
+                          home cluster's own repos, never here; see ADR-0020)
 .github/workflows/        the five supported control-surface workflows
 tests/unit/ · tests/render/  static checks invoked by `make test`
 docs/                     adr/ · arc42/ · lessons-learned/ · caveats-and-traps.md · recovery.md

@@ -23,11 +23,34 @@
 │       └── loadbalancer/     ← Reusable LB module (used for API LB)
 ├── platform/                  ← In-cluster manifests + Helm values
 │   ├── base/                  ← Namespaces, hcloud Secrets, NetworkPolicies, cluster-access
-│   └── helm-values/           ← Cilium, CCM, CSI, Traefik values
+│   └── helm-values/           ← Cilium, CCM, CSI ONLY (see § 5.1.1)
 ├── workloads/                 ← Argo CD Application examples
 ├── tests/                     ← Render + unit tests
 └── docs/                      ← arc42, ADRs, runbooks, lessons-learned
 ```
+
+### 5.1.1 Ownership boundary — what is NOT here
+
+**Rule: if a Helm values file is in `platform/helm-values/`, it is live. If a
+component is not listed as owned below, this repo cannot change it.**
+
+Verified against the home cluster's Argo CD on 2026-07-25 (**ADR-0020**).
+
+| Component | Owner | Changed where |
+|---|---|---|
+| network, firewall, servers, API LB, worker volumes | **this repo** | Terraform |
+| `platform/base/` manifests | **this repo** | here |
+| Cilium, Hetzner CCM, Hetzner CSI | **this repo** | `install-platform.sh` + `helm-values/` |
+| Traefik | Argo `traefik-remote` | home-cluster repo |
+| cnpg, Redis, Alloy, kube-state-metrics | Argo (**inline** values) | home-cluster repo |
+| Longhorn, NVIDIA device plugin | Argo (`aii-*`) | home-cluster repo |
+| GPU nodes `gpu-1` / `gpu-2` | manual Robot enrollment | `docs/runbooks/` |
+| Ingress LBs, CSI PVC volumes | Hetzner CCM / CSI at runtime | not declarative |
+| ~100 workload Applications | Argo, other repos | *by design* |
+
+The home cluster knows this cluster as destination **`home-remote`**. Zero of
+its 175 Applications reference this repo — `platform/argocd/` used to claim
+otherwise and was deleted.
 
 ## 5.2 Terraform module map
 

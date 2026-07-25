@@ -16,25 +16,16 @@ for yaml in "$PROJECT_ROOT"/platform/base/*.yaml; do
     cp "$yaml" "$OUTPUT_DIR/platform/$filename"
 done
 
-echo "Rendering Argo CD applications..."
-mkdir -p "$OUTPUT_DIR/argocd"
-for yaml in "$PROJECT_ROOT"/platform/argocd/*.yaml; do
-    filename=$(basename "$yaml")
-    cp "$yaml" "$OUTPUT_DIR/argocd/$filename"
-done
-
+# Only the charts this repo actually installs are rendered (ADR-0020).
+# Traefik, cnpg, redis, alloy and kube-state-metrics are owned by the home
+# cluster's Argo CD with inline values — this repo has no say in them.
 if command -v helm >/dev/null 2>&1; then
     echo "Rendering Helm charts..."
-    
-    helm repo add traefik https://traefik.github.io/charts 2>/dev/null || true
+
     helm repo add cilium https://helm.cilium.io 2>/dev/null || true
     helm repo add hcloud https://charts.hetzner.cloud 2>/dev/null || true
-    helm repo add cnpg https://cloudnative-pg.github.io/charts 2>/dev/null || true
-    helm repo add bitnami https://charts.bitnami.com/bitnami 2>/dev/null || true
-    helm repo add grafana https://grafana.github.io/helm-charts 2>/dev/null || true
-    helm repo add prometheus-community https://prometheus-community.github.io/helm-charts 2>/dev/null || true
     helm repo update >/dev/null 2>&1
-    
+
     mkdir -p "$OUTPUT_DIR/helm"
     
     helm template cilium cilium/cilium \
@@ -49,25 +40,6 @@ if command -v helm >/dev/null 2>&1; then
         --values "$PROJECT_ROOT/platform/helm-values/hcloud-csi-values.yaml" \
         --namespace kube-system > "$OUTPUT_DIR/helm/hcloud-csi.yaml" 2>/dev/null || echo "Warning: Failed to render hcloud-csi"
 
-    helm template traefik traefik/traefik \
-        --values "$PROJECT_ROOT/platform/helm-values/traefik-values.yaml" \
-        --namespace traefik > "$OUTPUT_DIR/helm/traefik.yaml" 2>/dev/null || echo "Warning: Failed to render traefik"
-    
-    helm template cnpg cnpg/cloudnative-pg \
-        --values "$PROJECT_ROOT/platform/helm-values/cnpg-values.yaml" \
-        --namespace cnpg-system > "$OUTPUT_DIR/helm/cnpg.yaml" 2>/dev/null || echo "Warning: Failed to render cnpg"
-    
-    helm template redis bitnami/redis \
-        --values "$PROJECT_ROOT/platform/helm-values/redis-values.yaml" \
-        --namespace data > "$OUTPUT_DIR/helm/redis.yaml" 2>/dev/null || echo "Warning: Failed to render redis"
-    
-    helm template alloy grafana/alloy \
-        --values "$PROJECT_ROOT/platform/helm-values/alloy-values.yaml" \
-        --namespace observability > "$OUTPUT_DIR/helm/alloy.yaml" 2>/dev/null || echo "Warning: Failed to render alloy"
-    
-    helm template kube-state-metrics prometheus-community/kube-state-metrics \
-        --values "$PROJECT_ROOT/platform/helm-values/kube-state-metrics-values.yaml" \
-        --namespace observability > "$OUTPUT_DIR/helm/kube-state-metrics.yaml" 2>/dev/null || echo "Warning: Failed to render kube-state-metrics"
 else
     echo "helm not installed, skipping chart rendering"
 fi

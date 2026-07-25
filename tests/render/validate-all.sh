@@ -38,13 +38,8 @@ done
 echo "==> Rendering Helm charts (dry-run)"
 
 if command -v helm >/dev/null 2>&1; then
-    helm repo add traefik https://traefik.github.io/charts 2>/dev/null || true
     helm repo add cilium https://helm.cilium.io 2>/dev/null || true
     helm repo add hcloud https://charts.hetzner.cloud 2>/dev/null || true
-    helm repo add cnpg https://cloudnative-pg.github.io/charts 2>/dev/null || true
-    helm repo add bitnami https://charts.bitnami.com/bitnami 2>/dev/null || true
-    helm repo add grafana https://grafana.github.io/helm-charts 2>/dev/null || true
-    helm repo add prometheus-community https://prometheus-community.github.io/helm-charts 2>/dev/null || true
     helm repo update >/dev/null 2>&1
     
     helm template cilium cilium/cilium \
@@ -59,13 +54,6 @@ if command -v helm >/dev/null 2>&1; then
         --values "$PROJECT_ROOT/platform/helm-values/hcloud-csi-values.yaml" \
         --namespace kube-system > "$OUTPUT_DIR/hcloud-csi.yaml" 2>/dev/null || echo "Failed to render hcloud-csi"
 
-    helm template traefik traefik/traefik \
-        --values "$PROJECT_ROOT/platform/helm-values/traefik-values.yaml" \
-        --namespace traefik > "$OUTPUT_DIR/traefik.yaml" 2>/dev/null || echo "Failed to render traefik"
-    
-    helm template cnpg cnpg/cloudnative-pg \
-        --values "$PROJECT_ROOT/platform/helm-values/cnpg-values.yaml" \
-        --namespace cnpg-system > "$OUTPUT_DIR/cnpg.yaml" 2>/dev/null || echo "Failed to render cnpg"
 else
     echo "helm not installed, skipping chart rendering"
 fi
