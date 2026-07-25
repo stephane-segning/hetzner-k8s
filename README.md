@@ -6,7 +6,7 @@ A production-ready, self-managed Kubernetes cluster on Hetzner Cloud for small p
 
 This repository provisions a **Hetzner-hosted k3s cluster** on Hetzner Cloud with:
 
-- **Control plane**: 3 `CPX22` control-plane nodes by default
+- **Control plane**: 3 `CPX32` control-plane nodes by default
 - **Workers**: 2 `CPX42` worker nodes by default
 - **Cluster API**: Terraform-managed Hetzner TCP load balancer on `:6443`
 - **CNI**: Cilium
@@ -22,7 +22,7 @@ This repository provisions a **Hetzner-hosted k3s cluster** on Hetzner Cloud wit
 - Hetzner private network and subnet
 - Firewall rules (SSH, Kubernetes API, internal traffic)
 - No public ingress to individual VMs; all public entry goes through load balancers
-- Deterministic `CPX22` control-plane and `CPX42` worker nodes running Ubuntu 24.04 LTS
+- Deterministic `CPX32` control-plane and `CPX42` worker nodes running Ubuntu 24.04 LTS
 - 1 Terraform-managed API load balancer for Kubernetes access
 - Optional worker-only data volumes for future Longhorn-style storage use
 
@@ -187,15 +187,21 @@ make bootstrap
 
 ## Cost Estimate
 
+Net (ex-VAT), baselined on the Hetzner usage preview for 01–25 Jul 2026.
+
 | Resource | Monthly Cost |
 |----------|--------------|
-| 3x CPX22 control planes | ~€22-23 |
-| 2x CPX42 workers | ~€32-33 |
-| 1x Terraform-managed API LB | ~€7.49 |
-| 1x Hetzner LB via Traefik service | ~€7.49 |
+| 3x CPX32 control planes | ~€40-45 (TBC) |
+| 4x CPX42 workers | ~€102 |
+| 3x LB11 (api, traefik-ingress, core-gateway) | ~€22 |
 | 1x Object Storage backend | ~€6.49 |
-| Traffic (est.) | ~€5-10 |
-| **Total** | **~€96-102/month** |
+| ~25x CSI PVC volumes | ~€11 |
+| 7x primary IPv4 | ~€3.50 |
+| **Total** | **~€185-190/month net** (~€220 gross incl. 19% VAT) |
+
+The off-cloud Robot **GPU servers** (`gpu-1`, `gpu-2`) are *not* in this
+table — they are not Terraform-managed and bill on a separate Robot
+invoice, where they dominate total spend.
 
 ## Security Baseline
 

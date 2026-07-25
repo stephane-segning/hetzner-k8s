@@ -87,9 +87,21 @@ verification: read `terraform/modules/firewall/main.tf`.
 
 ## 10.5 Cost
 
-**Q9: Monthly cost stays under €110**
+**Q9: Monthly cloud-project cost stays under €200 net**
 
-Given the default topology (3 × CPX22 + 3 × CPX42 + 2 LBs + Object
-Storage), the steady-state monthly cost should be within the budget
-documented in `Makefile show-costs`. Measured at the end of each Hetzner
-billing period.
+Re-baselined 2026-07-25 (was "under €110"). The original target predated
+four independent changes, none of which were cost regressions to fix:
+
+1. Hetzner raised prices ~25% on 2026-04-01 (CPX22 €5.99 → €7.99).
+2. Workers scaled 2 → 4 × CPX42 (€102/mo — the largest single line).
+3. A third LB (`core-gateway`) joined `api` + `traefik-ingress`.
+4. Control planes resized CPX22 → CPX32 (**ADR-0018**).
+
+Given the current topology (3 × CPX32 + 4 × CPX42 + 3 × LB11 + Object
+Storage + ~25 CSI volumes), steady-state is **~€185-190/mo net** (~€220
+gross incl. 19% VAT), per `Makefile show-costs`. Measured at the end of
+each Hetzner billing period.
+
+**Scope:** this budget covers the *Cloud project* only. The off-cloud Robot
+GPU servers bill separately and dominate total spend — judge them against
+their own budget, not this one.

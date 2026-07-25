@@ -13,7 +13,7 @@ Hetzner Cloud project
     │   └── rules: SSH 22/tcp, ICMP, intra-network all
     ├── Load balancer "ssegning-hetzner-k3s-api"  (lb11)
     │   └── service tcp/6443 → targets cp-01/02/03 on private-net :6443
-    ├── 3 × CPX22 (control planes)
+    ├── 3 × CPX32 (control planes)
     │   ├── eth0   public IPv4 + IPv6
     │   └── enp7s0 private 10.0.0.10-12
     ├── 2-3 × CPX42 (workers)
@@ -33,8 +33,15 @@ Hetzner Object Storage (separate but same project credentials)
 
 | Role          | Count | Type  | vCPU | RAM   | Disk   | Notes                           |
 |---------------|-------|-------|------|-------|--------|---------------------------------|
-| control-plane | 3     | CPX22 | 3    | 4 GB  | 80 GB  | k3s server with embedded etcd   |
-| worker        | 2-3   | CPX42 | 8    | 16 GB | 240 GB | k3s-agent; data volume optional |
+| control-plane | 3     | CPX32 | 4    | 8 GB  | 160 GB | k3s server with embedded etcd   |
+| worker        | 2-4   | CPX42 | 8    | 16 GB | 320 GB | k3s-agent; data volume optional |
+
+Control planes were `CPX22` (2 vCPU / 4 GB) until 2026-07-25; that size became
+the binding constraint and caused `NotReady` flapping (**ADR-0018**).
+
+Off-cloud **Robot** GPU servers (`hetzner-k8s-gpu-1/2`, 20 vCPU / 64 GB each)
+are joined manually over the vSwitch — they are not Terraform-managed and bill
+on a separate Robot invoice.
 
 Image: Ubuntu 24.04 LTS (Noble Numbat).
 

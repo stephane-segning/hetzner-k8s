@@ -25,7 +25,7 @@ This repository is operated as infrastructure code for a Hetzner-hosted k3s clus
 ## Cluster Shape
 
 - Default topology:
-  - 3 `CPX22` control planes
+  - 3 `CPX32` control planes
   - 2 `CPX42` workers
 - Bootstrap is deterministic:
   - first control plane initializes cluster

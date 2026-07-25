@@ -4,19 +4,29 @@ This document records key decisions made during the design of this platform.
 
 ## Infrastructure
 
-### Server Types: CPX22 Control Plane, CPX42 Workers
+### Server Types: CPX32 Control Plane, CPX42 Workers
 
-**Decision**: Use `CPX22` for control-plane nodes and `CPX42` for worker nodes
+**Decision**: Use `CPX32` for control-plane nodes and `CPX42` for worker nodes
+
+> Superseded the original `CPX22` control plane on 2026-07-25. See
+> **ADR-0018** for the measurements that forced the change; the summary is
+> that `CPX22`'s 4 GB was the binding constraint (not CPU — steal was 0.0%),
+> and it manifested as control planes flapping `NotReady` under etcd lease
+> latency. Do not "optimise" the CPs back down to `CPX22`.
 
 **Rationale**:
 
-- `CPX22` is sufficient for small k3s control-plane nodes
+- `CPX32` (4 vCPU / 8 GB) leaves real headroom over `k3s-server`'s ~2.5 GB
+  single-process footprint, which grows with the number of API object
+  *kinds* — and this cluster is CRD-heavy
 - `CPX42` gives workers enough headroom for application workloads
-- This stays within the target monthly budget while separating responsibilities
+- Separates control-plane and workload failure domains
 
 **Alternatives Considered**:
 
-- `CPX42` everywhere: simpler but less cost efficient for control-plane nodes
+- Staying on `CPX22` + evicting squatting operators: frees only ~300-400 MiB
+  per CP, which does not cover a 2.5 GB process on a 3.7 GB box
+- `CPX42` everywhere: simpler but not cost efficient for control-plane nodes
 - smaller worker nodes: less room for real workloads
 
 ### Node Layout: 3 Control-Plane Nodes, Optional Workers

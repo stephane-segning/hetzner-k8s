@@ -10,7 +10,7 @@ learned the hard way through operational incidents — live as ADRs in
 These are the macro choices that shape the cluster:
 
 - k3s on Ubuntu 24.04 LTS with embedded etcd (not external datastore)
-- CPX22 for control planes, CPX42 for workers (cost/HA balance)
+- CPX32 for control planes (resized from CPX22, ADR-0018), CPX42 for workers
 - Cilium CNI (not Flannel)
 - Hetzner CCM + CSI via Helm (external cloud-provider mode)
 - API LB is Terraform-managed; ingress LBs are CCM-managed

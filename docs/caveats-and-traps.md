@@ -347,6 +347,87 @@ sharp edges. Don't relax any of these without re-reading the ADR.
 
 ---
 
+## 8. Server resize (`server_type` change / Hetzner rescale)
+
+`server_type` is **not** `ForceNew` in the hcloud provider — changing it calls
+`Server.ChangeType()` (power off → resize → power on), keeping the server ID.
+That makes resizing far safer than replacement (no cloud-init re-run, no etcd
+rejoin), but the power cycle has its own traps.
+
+### 8.1 🧨 A rescale can leave `/etc/fstab` EMPTY → `/` stays read-only
+- **Trap:** the rescale's power-off can catch `/etc/fstab` mid-rewrite,
+  leaving it **0 bytes**. On the next boot the kernel cmdline mounts `/` as
+  `ro` (it always does — `root=UUID=… ro`), and `systemd-remount-fs` is what
+  flips it to `rw` **by reading fstab**. With an empty fstab it has nothing to
+  act on, exits `SUCCESS` having done nothing, and `/` stays read-only
+  forever.
+- **Symptom:** k3s crash-loops with a message that blames TLS, not the disk:
+  `level=fatal msg="Error: preparing server: failed to generate server
+  dependencies: remove /var/lib/rancher/k3s/server/tls/client-kube-proxy.crt:
+  read-only file system"`. Alongside it, a pile of unrelated-looking failed
+  units (`cloud-init` ×4, `snapd`, `fail2ban`, `grub-common`,
+  `k3s-bootstrap`) — all downstream of the same read-only root. **SSH still
+  works**, which makes it look like a k3s bug.
+- **It is a race, not a certainty.** Three identical CPs were rescaled
+  together on 2026-07-25; only cp-1 hit it. Assume it *may* happen on any
+  rescale; never rescale two etcd voters at once.
+- **First, rule out real disk damage** (30 seconds, and it changes the fix
+  completely):
+
+  ```bash
+  findmnt -no OPTIONS /                 # ro,relatime  → confirms the symptom
+  dmesg -T | grep -iE "EXT4-fs|I/O error"   # expect NOTHING
+  tune2fs -l /dev/sda1 | grep "Filesystem state"   # expect: clean
+  stat -c %s /etc/fstab                 # 0 → this trap
+  ```
+
+  `Filesystem state: clean` + no I/O errors ⇒ the disk is fine and `fsck`/
+  rescue mode is **not** needed. Do not reach for a rebuild.
+- **🩹 Fix (derive the UUIDs from the node itself, never copy another node's
+  fstab blindly):**
+
+  ```bash
+  mount -o remount,rw /
+  ROOT_UUID=$(blkid -s UUID -o value /dev/sda1)
+  EFI_UUID=$(blkid -s UUID -o value /dev/sda15)
+  printf "/dev/disk/by-uuid/%s / ext4 defaults 0 1\n" "$ROOT_UUID" > /etc/fstab
+  printf "/dev/disk/by-uuid/%s /boot/efi vfat defaults 0 1\n" "$EFI_UUID" >> /etc/fstab
+  findmnt --verify --fstab          # MUST report 0 parse errors before you reboot
+  systemctl daemon-reload
+  systemctl reset-failed k3s        # clears the restart-limit penalty
+  systemctl restart k3s
+  ```
+
+  Then **reboot once, deliberately, while quorum is healthy** to prove fstab
+  persists — far better than discovering it during the next incident. The
+  previously-failed units recover by themselves once `/` is writable.
+- **Note:** the Hetzner Ubuntu image uses the *same* root filesystem UUID on
+  every node (it is baked into the image), so a neighbour's fstab looks
+  correct. Use the local `blkid` anyway — `/boot/efi` genuinely differs.
+- **Ref:** ADR-0018, lessons-learned 2026-07-25.
+
+### 8.2 ⚠️ The `cpx22`/`cpx32` default lives in FOUR places
+- **Trap:** changing `control_plane_server_type` in `vars.tf` alone. All three
+  workflows carry their own fallback
+  (`${{ vars.TF_CONTROL_PLANE_SERVER_TYPE || 'cpx32' }}`), and a GitHub repo
+  **variable** of the same name overrides both.
+- **Symptom:** the next Infra Up silently *rescales the control planes back
+  down*, re-creating the memory starvation of ADR-0018.
+- **Fix / rule:** change `terraform/envs/prod/vars.tf`,
+  `infra-up.yml`, `infra-destroy.yml`, `platform-up.yml`, **and** the repo
+  variable together.
+
+### 8.3 ⚠️ `keep_disk` decides whether a resize is reversible
+- **Trap:** the hcloud provider defaults `keep_disk = false`, which upgrades
+  the disk as part of the resize. **A disk upgrade is one-way** — once it has
+  happened the server can never be rescaled *down* again.
+- **Fix / rule:** if you want the resize to stay reversible, set
+  `keep_disk = true` (the module does not expose it today — it would need a
+  new variable). The 2026-07-25 CPX22→CPX32 rescale happened to leave the
+  disk at 80 GB, so it remains reversible.
+
+---
+
 ## Quick index by symptom
 
 | You see…                                                            | Go to |
@@ -364,3 +445,7 @@ sharp edges. Don't relax any of these without re-reading the ADR.
 | `Node password rejected` / `Kubelet stopped posting node status`    | 4.2   |
 | Infra Up fails at `Guard control-plane replacements`                | 5.1 / 5.3 |
 | `kubectl top` / HPA broken, APIService `Available=False`            | 6.1   |
+| k3s: `… .crt: read-only file system` (looks like a TLS bug)         | 8.1   |
+| node `NotReady` in dashboard but `ssh` works fine                    | 8.1 / ADR-0018 |
+| many unrelated units failed at once (cloud-init, snapd, grub)        | 8.1   |
+| CPs silently shrank back to 4 GB after an Infra Up                   | 8.2   |

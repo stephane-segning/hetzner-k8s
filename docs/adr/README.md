@@ -29,6 +29,8 @@ including the painful ones learned the hard way.
 | 0015  | [Disable k3s's bundled metrics-server (platform GitOps owns it)](0015-disable-bundled-metrics-server.md) | Accepted |
 | 0016  | [Infra Up verifies node readiness, not just API `/livez`](0016-infra-up-node-readiness-gate.md) | Accepted |
 | 0017  | [Guard against control-plane split-brain (bootstrap join-not-init + `/readyz` LB health check)](0017-guard-against-control-plane-split-brain.md) | Accepted |
+| 0018  | [Resize control planes CPX22 → CPX32 (memory, not CPU)](0018-resize-control-planes-to-cpx32.md) | Accepted |
+| 0019  | [Keep workload operators off the control planes (and which ones must stay)](0019-keep-workload-operators-off-control-planes.md) | Accepted |
 
 ## Template
 

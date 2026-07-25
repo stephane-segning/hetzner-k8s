@@ -68,7 +68,7 @@ Copy the resulting single-line value into the GitHub secret `REMOTE_CLUSTER_KUBE
 Set these as repository or environment variables:
 
 - `TF_CLUSTER_NAME`: defaults to `hetzner-k8s`
-- `TF_CONTROL_PLANE_SERVER_TYPE`: defaults to `cpx22`
+- `TF_CONTROL_PLANE_SERVER_TYPE`: defaults to `cpx32`
 - `TF_WORKER_SERVER_TYPE`: defaults to `cpx42`
 - `TF_CONTROL_PLANE_COUNT`: defaults to `3`
 - `TF_WORKER_COUNT`: defaults to `2`
