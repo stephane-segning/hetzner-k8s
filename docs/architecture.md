@@ -15,7 +15,7 @@ This document describes the intended architecture of the remote Hetzner cluster 
 
 Default node layout:
 
-- `3 x CPX22` control planes
+- `3 x CPX32` control planes
 - `2 x CPX42` workers
 
 Node roles are deterministic:

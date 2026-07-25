@@ -24,7 +24,9 @@ test_variable_default() {
 }
 
 test_variable_default "cluster_name" "hetzner-k8s" "$PROJECT_ROOT/terraform/envs/prod/vars.tf"
-test_variable_default "control_plane_server_type" "cpx22" "$PROJECT_ROOT/terraform/envs/prod/vars.tf"
+# cpx32 since ADR-0018 (cpx22's 4 GB was the binding constraint and caused
+# control planes to flap NotReady). Do not "restore" this to cpx22.
+test_variable_default "control_plane_server_type" "cpx32" "$PROJECT_ROOT/terraform/envs/prod/vars.tf"
 test_variable_default "worker_server_type" "cpx42" "$PROJECT_ROOT/terraform/envs/prod/vars.tf"
 test_variable_default "control_plane_count" "3" "$PROJECT_ROOT/terraform/envs/prod/vars.tf"
 test_variable_default "worker_count" "2" "$PROJECT_ROOT/terraform/envs/prod/vars.tf"

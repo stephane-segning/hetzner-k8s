@@ -2,7 +2,7 @@ hcloud_token = "YOUR_HCLOUD_TOKEN"
 
 cluster_name = "hetzner-k8s"
 
-control_plane_server_type = "cpx22"
+control_plane_server_type = "cpx32"
 worker_server_type        = "cpx42"
 
 control_plane_count = 3

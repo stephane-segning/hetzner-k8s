@@ -31,8 +31,11 @@ In rough priority order:
 3. **Single, supported control surface.** GH Actions workflows are the
    only path that's expected to work and is documented. Local
    `terraform apply` is a break-glass.
-4. **Cost-bounded.** ~€100/month all-in for 3×CPX22 CPs, 2-3×CPX42
-   workers, Hetzner LBs, Object Storage. See `Makefile` `show-costs`.
+4. **Cost-bounded.** ~€185-190/month net for the Cloud project: 3×CPX32
+   CPs, 4×CPX42 workers, 3 Hetzner LBs, Object Storage, CSI volumes.
+   Re-baselined 2026-07-25 from the original ~€100 (§ 10.5 explains why).
+   Off-cloud Robot GPU servers bill separately. See `Makefile`
+   `show-costs`.
 5. **Observable enough to fail loudly.** Workflows self-validate (e.g.
    the Infra Up `/livez` gate), so green-on-workflow means
    reachable-cluster. Argo CD in the home cluster surfaces any drift in

@@ -32,7 +32,7 @@ chosen by the cluster owner.
 | GH Actions is the supported control surface                    | AGENTS.md — `infra-up`, `infra-down`, `infra-destroy`, `platform-up`, `verify-etcd-backups` |
 | No commit of `terraform.tfvars` or backup files                | AGENTS.md                                                                                   |
 | Argo CD lives in a separate home cluster, not in this one      | DECISIONS.md (GitOps controller survives remote cluster issues)                             |
-| Default topology: 3×CPX22 control planes, 2-3×CPX42 workers    | DECISIONS.md (cost, HA)                                                                     |
+| Default topology: 3×CPX32 control planes, 2-4×CPX42 workers    | DECISIONS.md (cost, HA)                                                                     |
 | Routine control-plane replacement is not a supported operation | AGENTS.md — recovery-grade work, gated by `allow_control_plane_replacement`                 |
 
 ## 2.3 Conventions

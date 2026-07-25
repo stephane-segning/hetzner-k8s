@@ -13,7 +13,7 @@ variable "cluster_name" {
 variable "control_plane_server_type" {
   description = "Hetzner server type for control-plane nodes"
   type        = string
-  default     = "cpx22"
+  default     = "cpx32"
 }
 
 variable "worker_server_type" {

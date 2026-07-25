@@ -1,8 +1,12 @@
 controller:
-  tolerations:
-    - key: node-role.kubernetes.io/control-plane
-      operator: Exists
-      effect: NoSchedule
+  # No control-plane toleration on purpose (ADR-0019). The CSI *controller* is
+  # a Deployment that provisions/attaches volumes; it is not needed to bring a
+  # cluster up, so it belongs on workers and must not compete for control-plane
+  # memory. It was the single largest non-k3s consumer on a CP (~222 MiB).
+  #
+  # Do NOT copy this removal to the CSI *node* DaemonSet, the CCM, or the
+  # Cilium operator — those legitimately tolerate the taint (see ADR-0019).
+  tolerations: []
   hcloudToken:
     existingSecret:
       name: hcloud
