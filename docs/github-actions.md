@@ -119,9 +119,25 @@ What it does:
 4. Runs `terraform validate`
 5. Runs `terraform plan`
 6. Refuses the run if the plan deletes or replaces control-plane servers unless `allow_control_plane_replacement=true`
-7. Applies the saved Terraform plan
-8. Powers on all Terraform-managed servers
-9. Publishes the API endpoint in the workflow summary
+7. Publishes a **blast-radius summary** (create / update / replace / destroy)
+8. Applies the saved Terraform plan
+9. Powers on all Terraform-managed servers
+10. Waits for the API `/livez`, then asserts every expected node is `Ready`
+11. Publishes the API endpoint in the workflow summary
+
+#### `plan_only` — see what a run would do, change nothing (ADR-0021)
+
+Set `plan_only=true` to stop after step 7. Nothing is applied. Use it whenever
+you are unsure what a run will touch — especially **before** any run that sets
+`replace_nodes`, `restore_from_s3`, or `allow_control_plane_replacement`, since
+those are the genuinely destructive paths.
+
+In this mode the control-plane guard **reports instead of failing**, so a
+preview that would be refused shows you why without a red ✗.
+
+⚠️ **Blind spot:** a changed `bootstrap/cloud-init/node.yaml` shows **no diff**,
+because `user_data` is under `ignore_changes` (ADR-0013). The plan cannot tell
+you that a future node replacement would pick up new cloud-init.
 
 What it does not do:
 

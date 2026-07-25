@@ -10,7 +10,7 @@ The five supported workflows live in `.github/workflows/`:
 
 | Workflow                 | Purpose                                                                                          |
 |--------------------------|--------------------------------------------------------------------------------------------------|
-| `infra-up.yml`           | Provision/refresh infra; optionally restore etcd from S3 or force-replace specific nodes (`replace_nodes`). Self-validates (API `/livez` + all expected nodes Ready) before reporting success. |
+| `infra-up.yml`           | Provision/refresh infra; optionally restore etcd from S3 or force-replace specific nodes (`replace_nodes`). Self-validates (API `/livez` + all expected nodes Ready) before reporting success. **`plan_only=true` previews the blast radius and stops before apply (ADR-0021)** — propose this before any destructive run. |
 | `infra-down.yml`         | Power off servers (preserves disks + Terraform state)                                            |
 | `infra-destroy.yml`      | `terraform destroy` (guarded)                                                                    |
 | `platform-up.yml`        | Install/upgrade Cilium, Hetzner CCM/CSI, Traefik, base manifests, etcd-S3 Secret                |
