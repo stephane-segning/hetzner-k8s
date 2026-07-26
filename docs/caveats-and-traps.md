@@ -319,6 +319,28 @@ sharp edges. Don't relax any of these without re-reading the ADR.
   re-asserts these.
 - **Ref:** ADR-0014, ADR-0009.
 
+### 6.3 🧨 CoreDNS ships with 1 replica and no cross-node HA
+- **Trap:** like metrics-server (6.1), k3s bundles CoreDNS with a lean,
+  edge-first default: `replicas: 1`, no topology/HA consideration beyond
+  its own pod-per-node spread constraint. On a genuine from-scratch
+  bootstrap, that's what gets created.
+- **Symptom:** a single CoreDNS pod crash (e.g. an apiserver blip during a
+  CP restart) is a full **cluster-wide DNS outage** until the one pod
+  restarts — hit prod twice in one day, correlating with `redis-ha-sentinel`
+  hostname-resolution failures and downstream client (LibreChat) reconnect
+  errors. Unlike 6.1, this is NOT a name collision (nothing else here
+  claims the `coredns`/`kube-dns` names) — it's just a bad-for-HA default.
+- **Fix / rule:** `apply_coredns_ha` (in `install-platform.sh`) scales it to
+  3 replicas — one per control-plane node, via the Deployment's own
+  pod-per-node topologySpreadConstraint, no extra affinity needed.
+  Idempotent, safe on every Platform Up run. Confirmed live via
+  `kubectl get deploy coredns -o json --show-managed-fields`: since k3s
+  v1.25.5+k3s1 the packaged-manifest reconciler doesn't reassert a
+  hardcoded replica count, so this is durable across restarts/upgrades on
+  an already-bootstrapped cluster — this step only matters for a genuine
+  from-scratch bootstrap (a brand-new cluster / full etcd wipe).
+- **Ref:** [k3s release v1.25.5+k3s1](https://github.com/k3s-io/k3s/releases/tag/v1.25.5%2Bk3s1); ai-helm `docs/migrations/2026-hetzner-cutover.md` §2026-07-25.
+
 ---
 
 ## 7. Operational / tooling
@@ -364,3 +386,4 @@ sharp edges. Don't relax any of these without re-reading the ADR.
 | `Node password rejected` / `Kubelet stopped posting node status`    | 4.2   |
 | Infra Up fails at `Guard control-plane replacements`                | 5.1 / 5.3 |
 | `kubectl top` / HPA broken, APIService `Available=False`            | 6.1   |
+| cluster-wide DNS resolution failures, self-heal after ~seconds       | 6.3   |

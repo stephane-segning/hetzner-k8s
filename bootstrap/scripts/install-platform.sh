@@ -221,6 +221,27 @@ install_ccm_and_csi() {
     kubectl rollout status daemonset/hcloud-csi-node -n kube-system --timeout=10m
 }
 
+apply_coredns_ha() {
+    # k3s bundles CoreDNS with 1 replica by default (its own lean/edge-first
+    # baseline) and no cross-node HA. A single-replica CoreDNS is a cluster-wide
+    # DNS outage waiting to happen: it crashed twice in one day on prod (an
+    # apiserver blip during a brief CP restart), each crash bringing down DNS
+    # cluster-wide until the one pod restarted.
+    #
+    # Since k3s v1.25.5+k3s1 the packaged-manifest reconciler no longer
+    # re-asserts a hardcoded replica count on restart/upgrade (confirmed via
+    # `kubectl get deploy coredns -o json --show-managed-fields`: the `deploy@*`
+    # field manager does not claim `spec.replicas`), so this scale-out is
+    # durable once applied on an existing cluster — this step only matters for
+    # a genuine from-scratch bootstrap, which is exactly when this script runs.
+    # Idempotent (safe to re-run). The Deployment's own topologySpreadConstraint
+    # (max 1 pod per node) spreads the 3 replicas across the 3 control planes
+    # automatically — no nodeAffinity needed.
+    log "Scaling CoreDNS to 3 replicas (one per control-plane node) for DNS HA"
+    kubectl -n kube-system scale deployment coredns --replicas=3
+    kubectl -n kube-system rollout status deployment/coredns --timeout=5m
+}
+
 install_traefik() {
     log "Installing Traefik"
     helm repo add traefik https://traefik.github.io/charts >/dev/null 2>&1 || true
@@ -260,6 +281,7 @@ main() {
     apply_namespaces
     label_loadbalancer_nodes
     install_cilium
+    apply_coredns_ha
     apply_hetzner_secrets
     apply_etcd_snapshot_s3_secret
     install_ccm_and_csi
