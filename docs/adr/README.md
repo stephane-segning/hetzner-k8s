@@ -29,6 +29,7 @@ including the painful ones learned the hard way.
 | 0015  | [Disable k3s's bundled metrics-server (platform GitOps owns it)](0015-disable-bundled-metrics-server.md) | Accepted |
 | 0016  | [Infra Up verifies node readiness, not just API `/livez`](0016-infra-up-node-readiness-gate.md) | Accepted |
 | 0017  | [Guard against control-plane split-brain (bootstrap join-not-init + `/readyz` LB health check)](0017-guard-against-control-plane-split-brain.md) | Accepted |
+| 0021  | [Infra Up gets a read-only `plan_only` mode](0021-infra-up-plan-only-mode.md) | Accepted |
 
 ## Template
 
